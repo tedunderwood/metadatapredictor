@@ -1,0 +1,65 @@
+\documentclass[12pt]{article}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+
+\usepackage[hmargin=3cm, vmargin=3.7cm]{geometry}
+
+\title{Architecture for metadata predictor}
+\author{}
+
+\begin{document}
+\maketitle
+
+\section{Overview and very rough pseudocode}
+
+Between us we've got at least two, maybe more, different classification tasks. I think a lot of the underlying data structures / classes can be reused, but there will also be significant differences. Language is a categorical variable, whereas date is an ordinal variable. Also, you'll be needing a dataset broken down to the page level, whereas I'll be working with volumes.
+
+That kind of flexibility won't be \emph{too} hard to design for. The more significant challenge may be scale. We're almost certainly working with datasets that are too large to fit into memory all at once. And yet we want to train classifiers using as much data as we can.
+
+The elegant, painful way to handle this would be to work with something like the Mahout library, built on top of Hadoop. If you want to tackle that, I'm game! But I spent last summer trying to translate routines into Hadoop and found that the task was likely to take more time than it was actually worth to me.
+
+I suspect we can probably handle the problem serially, with a bit of ingenuity. Perhaps the general logic of a solution is \textbf{a)} map metadata for the whole collection, so we know which subsets we need for which task. The metadata probably fits in memory. Then \textbf{b)} read in subsets of the collection as needed to train specific classifiers. In other words, we might read in all German texts, plus a random selection of non-German texts, in order to train a ``German" classifier. Then we release that memory (or the garbage collector releases it for us) and we read in all Italian texts, etc. The classifiers themselves will fit in memory without difficulty. Finally \textbf{c)} we make a pass through the whole collection, reading in chunks of n volumes at a time (where n fits in memory) and applying all our classifiers to make predictions for each chunk.
+
+A more detailed model of the procedure, in very rough pseudocode. I'm mainly concerned to identify the classes we're going to need and the parts of the logic that need to be abstracted for maximum flexibility.
+
+\begin{enumerate}
+
+\item Import metadata keyed to HathiTrust volume IDs.
+\item Create \emph{Volume} objects and organize these in a \emph{Collection.} For page-level classification it may possibly be useful to know in advance how many pages are contained in each volume. 
+\begin{quote}
+At this point we also \emph{might} need to make a preliminary pass through volumes to identify most-common features. But possibly that should be a separate task, since it's something that can be done once for a given collection.
+\end{quote}
+\item Create a \emph{ClassMap} object. This will tell us a) what metadata field in the \emph{Volumes} is relevant to this classification task, b) the specific classLabels we want to train and c) how to map the values in (a) into labels contained in (b). E.g., with date, this is going to be fairly complex, because we're going to create classes that represent ``bins" of dates at (say) the decade level, plus we may have to deal with missing data or entries like ``[18??]." We probably need to create some general protocol for class labels that are missing, suspect, or not relevant to this task.
+\item Now we iterate through the list of classLabels in our \emph{ClassMap,} building a \emph{Classifier} for each one and storing those classifiers in an \emph{Ensemble}. For each classLabel, do:
+\begin{itemize}
+\item Identify the subset of \emph{Volumes} or \emph{VolumePages} that we intend to use as a training set for this classLabel. An important question here is how to balance the number of positive and negative examples for each class. We'd like to use as many data points as possible, but since we can't fit everything in memory, this conflicts with the goal of reproducing the original ratio between positive and negative examples in the larger Collection.
+\item Identify the features to be used for classification. This might be either a global set of features used for all classifiers, or a set of features selected for this specific classLabel. In the latter case, we may need to make a pass through the \emph{Volumes,} loading texts or recalculated word counts, in order to identify features that are useful for discrimination here. Possibly this task overlaps with the next one.
+\item Create one or more \emph{Corpus}es. A \emph{Corpus} is an array of \emph{Instance}s, which can represent either Volumes or Pages. The important thing about an \emph{Instance} is that it has a classLabel and a set of features mapped to featureValues (i.e., words and wordcounts). So at this point (if not in the previous step) we're doing disk access to get feature counts.
+\item Send the \emph{Corpus} to a \emph{Classifier.} There's probably an interface or superclass like \emph{Classifier} that defines general methods all classifiers must have, but this is implemented as \emph{NaiveBayesClassifier,} \emph{kNNClassifier,} and so on. Construction of the classifier actually trains a model for predicting this classLabel, and creates parameters, coefficients, etc. that are stored in the \emph{Classifier.} Note that some classifiers are going to need to normalize feature counts -- i.e., as relative rather than absolute frequencies. So information like ``total number of words in a given volume'' needs to be incorporated in the \emph{Corpus} for the \emph{Classifier} to use if needed.
+\end{itemize}
+\item Now that we have an \emph{Ensemble} of \emph{Classifier}s, we can test them or actually perform classification. For testing/evaluation of our method we would apply these classifiers to a held-out \emph{TestCorpus}. For actual production, we would iterate through the whole \emph{Collection,} chunk by chunk. For each chunk do:
+\begin{itemize}
+\item Convert the chunk of Volumes into a \emph{Corpus} by reading in the appropriate features (and segmenting by page if that's required for this classification task).
+\item For each classifier in the ensemble, generate a prediction for all \emph{Instances} in this \emph{Corpus}.
+\item Store all predictions in a \emph{PredictionArray}.
+\end{itemize}
+\item For some tasks, we might just use the \emph{PredictionArray} as-is. But if we're predicting date, or a similar continuous/ordinal variable, there's another step. We have a histogram of probabilities that each Volume belong in a particular decade (or whatever bin size we decide to use). Now to generate an actual date at the level of individual years, we need to do smoothing and interpolation. For instance, we might do loess smoothing on all twenty decade probabilities, and then find the peak of the curve. The x-axis value of the peak is the inferred date of the document.
+\begin{quote}
+Another possibility here is to use a kNN classifier, which can predict a continuous value directly, without smoothing and interpolation.
+\end{quote}
+\item For some tasks, we might end here. But in practice, it's likely that we'll want to identify outliers in the dataset---works where the inferred classLabel differs greatly from the metadata provided by Hathi. Since we can do a better job if we're training on a cleaner corpus, we could mark those Volumes as unreliable for training purposes and re-run the whole process.
+\end{enumerate}
+
+Testing this process is tricky, because the whole point is that we don't trust the supposed ``ground truth" represented by metadata in Hathi. We might need to manually confirm a small dataset for testing purposes.
+
+\section{}
+A couple of sources on date prediction. No need to look at them, they're not necessarily relevant to our broader project. Just filing them here for future reference.
+\begin{thebibliography}{1}
+\bibitem{tilahun} Tilahun, Gelila, Andrey Feuerverger, and Michael Gervers. ``Dating Medieval English charters." \emph{The Annals of Applied Statistics} 6, no. 4 (2012): 1615-1640.
+
+\bibitem{kumar} Kumar, Abhimanu, Jason Baldridge, Matthew Lease, and Joydeep Ghosh. ``Dating Texts without Explicit Temporal Cues." arXiv preprint arXiv:1211.2290 (2012).
+\end{thebibliography}
+\end{document}
