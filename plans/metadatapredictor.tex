@@ -7,7 +7,7 @@
 
 \usepackage[hmargin=3cm, vmargin=3.7cm]{geometry}
 
-\title{Architecture for metadata predictor}
+\title{Architecture for metadata inference}
 \author{}
 
 \begin{document}
@@ -54,6 +54,87 @@ Another possibility here is to use a kNN classifier, which can predict a continu
 \end{enumerate}
 
 Testing this process is tricky, because the whole point is that we don't trust the supposed ``ground truth" represented by metadata in Hathi. We might need to manually confirm a small dataset for testing purposes.
+
+\section{Variants and ways this might eventually be extended.}
+
+I'm eventually also going to want to use a lot of these classes for a couple of other tasks, so I may want to set them up in a way that can be extended.
+
+\begin{itemize}
+\item I'm going to need to expand my page-level genre classification workflow to encompass datasets that don't fit in memory. Much of the code we write here---especially iterating through a collection too large to fit in memory---will be applicable to that task. Some relevant differences: the features I use in that task are different, including things like number-of-capitalized lines and position-of-page-within-volume. Also, after page-level classification is complete, there's a separate process of smoothing the sequence using a hidden Markov model. Also, in that task labeled training data is separate from the main collection, which is not labeled. So, on the whole a pretty different process. It may just be a question of reusing parts of this code.
+\item I might also use some of these classes for a co-training process where the hidden Markov model and page-level classifiers effectively keep each other honest.
+\end{itemize}
+
+\section{Rough class definitions}
+
+We're sort of taking this from the top level down.
+
+\subsection{Main class}
+
+Called whatever we want to call this---I haven't decided. ``MetadataPredictor" is a little clunky, maybe we can come up with something better. CollectionMapper? This class accepts string arguments so it can be called from the command line. Uses those arguments to select a \emph{ClassificationProcess}. This allows us to encapsulate some of the variations involved in different applications, instead of having a lot of code for different variations confusingly piled up in the main class itself.
+
+String arguments probably also include file paths to sources of data and metadata.
+
+\subsection{ClassificationProcess}
+
+An abstract superclass; we can define subclasses like LanguageClassificationProcess, DateClassificationProcess, GenreClassificationProcess, and so on. This class does guides the overall flow of the process and decides things like, whether the whole classification process runs once or twice, or more; whether evaluation is done, etc. If there are generalizable aspects of implementation we can move them to the superclass.
+
+There are aspects of this class that won't be generalizable. But in general, this class accepts paths to data and metadata. It passes the metadata path to some kind of \emph{MetadataReader,} which returns a \emph{Collection} object and a \emph{ClassMap.} Then it iterates through the classLabels in the \emph{ClassMap}; in each case it 
+\begin{itemize}
+\item Iterates across classLabels in the \emph{ClassMap} and, for each one, gets back an ArrayList of \emph{Volumes} that need to be read.
+\item It sends that array of \emph{Volumes} to some kind of {CorpusReader,} which actually reads in the data for those volumes, breaks them down to pages if it's the kind of {CorpusReader} that produces page-level data, and returns a {Corpus} of {Instances.}
+\end{itemize}
+
+\subsection{MetadataReader}
+Abstract superclass, will need to be instantiated as \emph{HTRCMetadataReader} or as \emph{TaubMetadataReader}, etc., because I work with metadata that is already in a specific tabular form.
+
+It accepts path(s) and uses them to locate a) the metadata itself and b) some kind of file that defines a \emph{ClassMap} by mapping specific metadata values to classes. Format to be defined.
+
+\subsection{Collection}
+Contains an ArrayList of \emph{Volumes} and a \emph{ClassMap}. Has a method that accepts a classLabel and returns all \emph{Volumes} matching that label. Another method should accept a classLabel and an integer n and return n randomly distributed \emph{Volumes} matching the classLabel. Possibly a third method returns n randomly distributed \emph{Pages.}
+
+\subsection{Volume}
+Fields: a volume must have a String volume ID (normally the HathiTrust volume ID).
+
+It can have a number of other metadata fields drawn from existing manual metadata (date, language, genre, possibly title and author).
+
+It can also have tentative predictions about those fields produced by our own classification process. (This will become relevant if we need to repeat the classification process more than once, using past predictions to filter the training set.) Note that predictions can be a little tricky to represent, e.g. our prediction about language is not necessarily a string like ``Greek." It could be a series of language categories, each connected to a probability (real number between 0 and 1) for that language. So I'm going to tentatively suggest that we create a \emph{Prediction} class, and that the Volume should store \emph{Prediction}s rather than values.
+
+We shouldn't assume that the volume actually contains information for all possible metadata fields. For many projects, most fields will be irrelevant.
+
+A volume may have integer fields that record the number of pages in the volume and number of words in the volumes. But it doesn't contain actual wordcount data for pages or the volume as a whole. That's the job of \emph{Instances.} A Volume is a persistent object; Instances are created and destroyed each time we train a classifier or classify a chunk of the collection.
+
+\subsection{ClassMap}
+Abstract superclass instantiated as subclasses: OrdinalClassMap, NominalClassMap, etc.
+
+Basically, it contains an ArrayList of classLabels, and maps specific metadata values to classLabels. An OrdinalClassMap probably also contains a field for binWidth.
+
+Also contains a link to the Collection that it maps.
+
+For the date problem, classLabels are integers representing the midpoint of a "bin," for many other problems, they are strings. We could handle this in one of two ways: 1) treat dates as String representations of the integer. or 2) let Ordinal classLabels be integers and try to encapsulate this problem within the ClassMap. E.g., define a nextSubset() method inside the ClassMap that allows the ClassificationProcess to iterate across classLabels without necessarily needing to know whether they are strings or integers. The process just tells the ClassMap "next!" and lets the ClassMap identify the next label and extract matching volumes from the Collection.
+
+\vspace{5 mm}
+
+\emph{Things are going to get a bit sketchier here, because I'm running out of time to write this morning.}
+
+\subsection{Classifier}
+Abstract class, instantiated as BayesianClassifier, KNNClassifier, etc. Some of these we might write ourselves, and some might just be wrappers for existing classes in Weka.
+
+\subsection{Corpus}
+Basically an array of Instances.
+
+\subsection{Instance}
+Each instance has a class label, and a list of features mapped to feature counts. Not sure yet whether this is implemented as a pair of ArrayLists or as a HashMap.
+
+\subsection{CorpusReader}
+Abstract superclass instantiated as as \emph{HTRCMetadataReader} or \emph{TaubMetadataReader,} because it's likely that our data will be in different formats.
+
+This class reads in word count data for the Volumes it is sent (or possibly Volumes + a list of page indexes if we want to read in specific pages).
+
+It may either read this from word count files already produced by a separate tokenizing process, or it may actually do the tokenizing. I think in the case of my Taub data it's going to do the former. I already have a separate tokenizing/word counting workflow. But this could be different for the HTRC implementation.
+
+\subsection{Prediction}
+
+\subsection{PredictionArray}
 
 \section{}
 A couple of sources on date prediction. No need to look at them, they're not necessarily relevant to our broader project. Just filing them here for future reference.
