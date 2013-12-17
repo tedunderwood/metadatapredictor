@@ -81,7 +81,7 @@ public class TaubMetadataReader extends MetadataReader {
 						// can be used as an index for tokens.
 					}
 					Volume volume = new Volume(htid, metadataValues);
-					
+					collection.addVolume(volume);
 				}
 			}
 		}

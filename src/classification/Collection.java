@@ -15,4 +15,12 @@ public class Collection {
 	 */
 	ArrayList<Volume> volumes;
 	ClassMap classMap;
+	
+	public Collection() {
+		ArrayList<Volume> volumes = new ArrayList<Volume>();
+	}
+	
+	public void addVolume(Volume volume) {
+		volumes.add(volume);
+	}
 }
