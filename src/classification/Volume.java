@@ -34,8 +34,38 @@ public class Volume {
 	int numPages;
 	int numWords;
 	
+	/**
+	 * @param htid A string holding the HathiTrust volume ID.
+	 * @param Values A map that contains values for a variable number of fields,
+	 * depending on what fields the MetadataReader was instructed to read.
+	 * If fields labeled <code>totalpages</code> or <code>totalwords</code> are present,
+	 * they receive special treatment.
+	 */
 	public Volume(String htid, HashMap<String, String> Values) {
 		this.htid = htid;
-		this.metadataValues = Values;
+		metadataValues = Values;
+		String pagecount = metadataValues.get("totalpages");
+		if (pagecount != null) {
+			numPages = Integer.parseInt(pagecount);
+		}
+		
+		String wordcount = metadataValues.get("totalwords");
+		if (wordcount != null) {
+			numWords = Integer.parseInt(pagecount);
+		}
+
+		// If those fields are not read from the metadata file, they
+		// will be initialized to zero by Java's default behavior.
+	}
+	
+	/**
+	 * @param field The field for which we are seeking values.
+	 * @return thevalue The value (if any) for this field. Note
+	 * that this method will return null, in the case where the
+	 * field is not in <code>metadataValues</code> for this Volume.
+	 */
+	public String getValue(String field) {
+		String thevalue = metadataValues.get(field);
+		return thevalue;
 	}
 }

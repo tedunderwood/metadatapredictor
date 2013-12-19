@@ -1,4 +1,5 @@
 package classification;
+import java.util.ArrayList;
 
 /**
  * @author tunderwood
@@ -10,5 +11,24 @@ package classification;
  *
  */
 public abstract class ClassMap {
-	private Collection collection;
+	Collection collection;
+	final String UNKNOWN = "__unknown__";
+	
+	
+	/**
+	 * All instantiations of ClassMap should be able to return
+	 * an ArrayList of Volumes matching a classLabel.
+	 * @param aClass
+	 * @return An ArrayList of Volumes matching aClass.
+	 */
+	public abstract ArrayList<Volume> getMembers(String aClass);
+	
+	/**
+	 * All instantiations of ClassMap should have a method that
+	 * returns an ArrayList of valid classes (i.e., excluding
+	 * the special UNKNOWN class.)
+	 * @return An ArrayList containing the names of all valid
+	 * classes in this map.
+	 */
+	public abstract ArrayList<String> getValidClasses();
 }
