@@ -3,6 +3,8 @@ package classification;
 import java.io.*;
 import java.util.Vector;
 
+import datasets.InputFileException;
+
 public class LineReader {
 	File fileName;
 	

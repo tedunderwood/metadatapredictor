@@ -1,11 +1,13 @@
 package classification;
 import java.util.ArrayList;
 
+import datasets.ClassMap;
+
 /**
  * @author tunderwood
  *
  */
-class Prediction {
+public class Prediction {
 	ClassMap classMap;
 	ArrayList<Double> probabilities;
 }

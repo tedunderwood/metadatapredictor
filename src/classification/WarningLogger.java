@@ -6,18 +6,18 @@ package classification;
  * @since 2013-12-18
  *
  */
-public class WarningLogger {
-	LineWriter theWriter;
-	boolean writeToFile = false;
+public final class WarningLogger {
+	static LineWriter theWriter;
+	static boolean writeToFile = false;
 	
-	public WarningLogger(boolean writeToFile, String filename) {
-		this.writeToFile = writeToFile;
+	public static void initializeLogger(boolean toFile, String filename) {
+		writeToFile = toFile;
 		if (writeToFile) {
 			theWriter = new LineWriter(filename, true);
 		}
 	}
 	
-	public void logWarning(String theWarning) {
+	public static void logWarning(String theWarning) {
 		if (writeToFile) {
 			theWriter.print(theWarning);
 		}

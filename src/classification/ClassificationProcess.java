@@ -1,5 +1,8 @@
 package classification;
 
+import datasets.ClassMap;
+import datasets.Collection;
+
 /**
  * @author tunderwood
  * @version 1.0
