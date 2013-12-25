@@ -23,7 +23,12 @@ public class LogisticClassifier extends SupervisedLearner {
 	double[][] memberProbs;
 	
 	public LogisticClassifier(String genreToIdentify, ArrayList<Double> classLabels, ArrayList<String> features, 
-			ArrayList<ArrayList<Double>> docFeatureValues, String ridgeParameter, boolean verbose) {
+			ArrayList<ArrayList<Double>> docFeatureValues, String ridgeParameter) {
+		
+		boolean verbose = Global.verbose;
+		// It's a bit of a hack, but we store a flag indicating how verbosely to log events in the
+		// static final class Global.
+		
 		numFeatures = features.size();
 		numInstances = classLabels.size();
 		this.ridgeParameter = ridgeParameter;
@@ -121,13 +126,13 @@ public class LogisticClassifier extends SupervisedLearner {
 		ArrayList<Double> testProbs = new ArrayList<Double>();
 		
 		for (Document doc : pointsToTest) {
-			testProbs.add(predictInstance(doc));
+			testProbs.add(predictDocument(doc));
 		}
 		
 		return testProbs;
 	}
 	
-	public double predictInstance(Document instance) {
+	public double predictDocument(Document instance) {
 		ArrayList<Double> vector = new ArrayList<Double>();
 		for (String term : features) {
 			vector.add(instance.getNormalizedTermFreq(term));
@@ -159,7 +164,14 @@ public class LogisticClassifier extends SupervisedLearner {
 		return test;
 	}
 	
-	
+	public double predictScalar(double value) {
+		assert (numFeatures == 1);
+		
+		ArrayList<Double> vector = new ArrayList<Double>(1);
+		vector.add(value);
+		double[] prediction = predictVector(vector);
+		return prediction[0];
+	}
 	
 
 }
