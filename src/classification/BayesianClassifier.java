@@ -37,6 +37,9 @@ public class BayesianClassifier extends SupervisedLearner {
 	/** Number of documents in corpus. */
 	int D;
 	
+	/** A logistic classifier to calibrate results. */
+	LogisticClassifier logisticCalibration;
+	
 	/** Create a Bayesian model to recognize a particular document
 	 * category.
 	 */
@@ -92,9 +95,36 @@ public class BayesianClassifier extends SupervisedLearner {
 			sumProbability += d;
 		}
 		baseProbability = Math.log(sumProbability / memberDegrees.length);
+		
+		// Now we need to build a simple logistic classifier that will calibrate
+		// the Bayesian predictions to produce a probabilistic prediction between
+		// zero and one.
+		//
+		// We start by running this Bayesian classifier on its own training documents.
+		ArrayList<ArrayList<Double>> predictionsOnTrainingSet = new ArrayList<ArrayList<Double>>(D);
+		ArrayList<Document> allDocs = corpus.getAllInstances();
+		for (Document doc : allDocs) {
+			ArrayList<Double> onefeature = new ArrayList<Double>(1);
+			onefeature.add(rawPrediction(doc));
+			predictionsOnTrainingSet.add(onefeature);
+		}
+		
+		// Then we need a list of "features." Since we only have one "feature" (the
+		// Bayesian prediction) we create a dummy list. "__label__" below is similarly
+		// a dummy value for the class label.
+		ArrayList<String> dummy = new ArrayList<String>();
+		dummy.add("__feature__");
+		
+		logisticCalibration = new LogisticClassifier("__label__", corpus.getMembershipProbs(), 
+				dummy, predictionsOnTrainingSet, "0");
 	}
 	
-	public double predictInstance(Document instance) {
+	public double predictDocument(Document instance) {
+		double rawBayesianValue = rawPrediction(instance);
+		return logisticCalibration.predictScalar(rawBayesianValue);
+	}
+	
+	public double rawPrediction(Document instance) {
 		double prediction = baseProbability;
 		//
 		for (int f = 0; f < featureCount; ++f) {

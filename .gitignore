@@ -1,3 +1,7 @@
+## don't track hidden files
+
+.*
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof

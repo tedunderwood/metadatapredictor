@@ -74,4 +74,8 @@ public class Volume {
 	public int getNumPages() {
 		return numPages;
 	}
+	
+	public int getNumWords() {
+		return numWords;
+	}
 }
