@@ -12,6 +12,10 @@ public LineReader(String dirPath) {
 	this.fileName = new File(dirPath);
 }
 
+public LineReader(File fileName) {
+	this.fileName = fileName;
+}
+
 public String[] readlines() throws InputFileException {
 	try{
 		BufferedReader filein = new BufferedReader(new FileReader(fileName));
