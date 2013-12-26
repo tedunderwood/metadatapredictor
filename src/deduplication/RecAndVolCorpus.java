@@ -44,6 +44,17 @@ public class RecAndVolCorpus {
 	
 	static final int ALLOWEDERRORS = 10;
 	
+	/**
+	 * Generates a corpus of Summary objects at both the Record and Volume
+	 * levels to permit deduplication. Assumes that the wordcount data has already
+	 * been read from file and stored in a map where volIDs act as keys to lower
+	 * level maps keyed by word.
+	 *  
+	 * @param collection The collection storing metadata; it provides a list of
+	 * volume IDs.
+	 * @param features The array of features we're using for the deduplication process. 
+	 * @param wordcounts The map of maps storing wordcounts.
+	 */
 	public RecAndVolCorpus(Collection collection, String[] features, Map<String, HashMap<String, Integer>> wordcounts) {
 		// The error-logging system implemented here allows for the possibility that we may not
 		// have wordcount data for all the volumes in the collection. Mismatches get sent to
