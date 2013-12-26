@@ -1,10 +1,12 @@
 package deduplication;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
 import classification.LineReader;
+import classification.LineWriter;
 import classification.WarningLogger;
 import datasets.InputFileException;
 import datasets.TaubMetadataReader;
@@ -25,6 +27,7 @@ public class Deduplicate {
 		String metadataSource = "";
 		String featureSource = "";
 		String dataSource = "";
+		String outputPath = "";
 		
 		String[] features;
 		LineReader featureReader = new LineReader(featureSource);
@@ -64,6 +67,12 @@ public class Deduplicate {
 		}
 		
 		RecAndVolCorpus corpus = new RecAndVolCorpus(metadata, features, wordcounts);
+		corpus.deduplicateCorpus();
+		ArrayList<Connection> connections = corpus.getSortedConnections();
+		int numberOfConnections = connections.size();
+		String[] outputLines = new String[numberOfConnections];
+		LineWriter output = new LineWriter(outputPath, false);
+		output.send(outputLines);
 	}
 	
 	private static String stacktraceToString(InputFileException e) {

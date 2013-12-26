@@ -91,6 +91,9 @@ public class RecAndVolCorpus {
 				
 				summaries.add(newSummary);
 			}
+			makeRecordSummaries(numFeatures);
+
+			numDocuments = summaries.size();
 		}
 	}
 
@@ -227,7 +230,7 @@ public class RecAndVolCorpus {
 		}
 	}
 	
-	public ArrayList<Connection> getConnections() {
+	public ArrayList<Connection> getSortedConnections() {
 		Collections.sort(connections);
 		return connections;
 	}
