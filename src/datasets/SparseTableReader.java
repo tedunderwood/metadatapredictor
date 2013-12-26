@@ -24,7 +24,7 @@ public class SparseTableReader {
 	 * @return A list of summary objects.
 	 * @throws InputFileException
 	 */
-	public Map<String, HashMap<String, Integer>> turnTSVintoSummaries() throws InputFileException {
+	public Map<String, HashMap<String, Integer>> readTSVasMap() throws InputFileException {
 		// Get all the files in the folder.
 		File folder = new File(dataPath);
 		File[] listOfFiles = folder.listFiles();

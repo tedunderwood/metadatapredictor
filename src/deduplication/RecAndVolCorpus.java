@@ -3,6 +3,7 @@ package deduplication;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.HashMap;
@@ -13,6 +14,7 @@ import classification.WarningLogger;
 
 import datasets.InputFileException;
 import datasets.Volume;
+import datasets.Collection;
 
 /**
  * A data structure that collects volumes as well as the records
@@ -34,7 +36,6 @@ import datasets.Volume;
 public class RecAndVolCorpus {
 	
 	ArrayList<Volume> volumes;
-	HashSet<String> featuresToLoad;
 	ArrayList<Summary> summaries;
 	public int numDocuments;
 	ArrayList<Connection> connections;
@@ -42,11 +43,61 @@ public class RecAndVolCorpus {
 	static final double THRESHOLD = 0.98;
 	
 	static final int ALLOWEDERRORS = 10;
+	
+	public RecAndVolCorpus(Collection collection, String[] features, Map<String, HashMap<String, Integer>> wordcounts) {
+		// The error-logging system implemented here allows for the possibility that we may not
+		// have wordcount data for all the volumes in the collection. Mismatches get sent to
+		// a log file, as long as they are below the ALLOWEDERRORS constant set above. (We don't
+		// want to keep going if things are deeply dysfunctional.)
+		int numberOfErrors = 0;
+		// This counter keeps track of the number of errors so far.
+		
+		ArrayList<String> featureSequence = new ArrayList<String>();
+		for (String feature : features) {
+			featureSequence.add(feature);
+		}
+		int numFeatures = featureSequence.size();
+		summaries = new ArrayList<Summary>();
+		
+		ArrayList<Volume> volumes = collection.getVolumes();
+		// The basic strategy here is to iterate over volumes in the collection,
+		// find wordcount data for each, and turn the wordcounts into Summary objects that can be
+		// efficiently deduplicated.
+		
+		for (Volume vol : volumes) {
+			String volID = vol.htid;
+			HashMap<String, Integer> volWordcounts = wordcounts.get(volID);
+			if (volWordcounts == null) {
+				WarningLogger.logWarning("Could not find " + vol.htid);
+				numberOfErrors += 1;
+				if (numberOfErrors > ALLOWEDERRORS) {
+					throw new RuntimeException("Error allowance exceeded.");
+				}
+			}
+			else {
+				double[] vector = new double[numFeatures];
+				// The VolumeReader is designed to produce Document objects for a generic classification
+				// process. But in the Deduplication package we have a different task and are using
+				// Summary objects -- the main difference being that feature values are stored simply
+				// as an array rather than a HashMap. Optimization -- possibly premature optimization,
+				// but there you have it.
+				for (int i = 0; i < numFeatures; ++i) {
+					Double value = (double) volWordcounts.get(featureSequence.get(i));
+					if (value == null) vector[i] = 0d;
+					else vector[i] = value; 
+				}
+				
+				Summary newSummary = new Summary(vol, vector);
+				
+				summaries.add(newSummary);
+			}
+		}
+	}
 
 	/**
-	 * Generates a training corpus of volume-level Instances by creating one Instance per Volume.
-	 * In this constructor, we assume a crisp binary separation between pos/neg instances, but
-	 * that doesn't have to be assumed in all constructors.
+	 * Generates a corpus of Summary objects at both the Record and Volume
+	 * levels to permit deduplication. Assumes that the data input is coming
+	 * from files stored in pairtree.
 	 * 
 	 * @param allVolumes Volumes to read for this corpus.
 	 * @param dataPath Path to the root directory for volumes.
@@ -56,7 +107,6 @@ public class RecAndVolCorpus {
 	 */
 	public RecAndVolCorpus(ArrayList<Volume> allVolumes, String dataPath, HashSet<String> featuresToLoad) {
 	
-		this.featuresToLoad = featuresToLoad;
 		volumes = allVolumes;
 		VolumeReader reader = new VolumeReader(dataPath);
 		
@@ -65,6 +115,7 @@ public class RecAndVolCorpus {
 			featureSequence.add(feature);
 		}
 		int numFeatures = featureSequence.size();
+		summaries = new ArrayList<Summary>();
 		
 		int numberOfErrors = 0;
 		
@@ -101,8 +152,22 @@ public class RecAndVolCorpus {
 		}
 		
 		// We've added summaries for all the volume data points. Now we're going to create
-		// summaries for the records that group volumes. In order to do that we need to
-		// create volume groups keyed by recordID in a map.
+		// record-level Summary objects.
+		
+		makeRecordSummaries(numFeatures);
+
+		numDocuments = summaries.size();
+	}
+
+	/**
+	 * Assumes that <code>summaries</code> already contains a list of volume-level
+	 * Summary objects, and expands it by creating record-level objects for the
+	 * records that encompass the volumes. This is necessary in deduplication,
+	 * because it's quite possible that one volume is matched by a record that's
+	 * a three-volume set.
+	 */
+	public void makeRecordSummaries(int numFeatures) {
+		// We start by creating volume groups keyed by recordID in a map.
 		HashMap<String, ArrayList<Summary>> sorter = new HashMap<String, ArrayList<Summary>>();
 		for (Summary thisSummary : summaries) {
 			String recordID = thisSummary.getRecordID();
@@ -126,7 +191,6 @@ public class RecAndVolCorpus {
 				summaries.add(recordSummary);
 			}
 		}
-		numDocuments = summaries.size();
 	}
 	
 	public void deduplicateCorpus() {
