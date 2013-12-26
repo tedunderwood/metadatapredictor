@@ -68,6 +68,8 @@ public class Deduplicate {
 		
 		RecAndVolCorpus corpus = new RecAndVolCorpus(metadata, features, wordcounts);
 		corpus.deduplicateCorpus();
+		// That's where the actual work of detecting connections takes place.
+		
 		ArrayList<Connection> connections = corpus.getSortedConnections();
 		int numberOfConnections = connections.size();
 		String[] outputLines = new String[numberOfConnections];
