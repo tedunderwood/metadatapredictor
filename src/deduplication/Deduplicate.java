@@ -71,9 +71,13 @@ public class Deduplicate {
 		// That's where the actual work of detecting connections takes place.
 		
 		ArrayList<Connection> connections = corpus.getSortedConnections();
+		// The connections are sorted in order of cosine similarity.
+		
 		int numberOfConnections = connections.size();
 		String[] outputLines = new String[numberOfConnections];
 		LineWriter output = new LineWriter(outputPath, false);
+		// The "false" means it's not set to append if output file already exists.
+		
 		output.send(outputLines);
 	}
 	
