@@ -42,7 +42,7 @@ public class RecAndVolCorpus {
 	static final int WINDOW = 6000;
 	static final double THRESHOLD = 0.98;
 	
-	static final int ALLOWEDERRORS = 10;
+	static final int ALLOWEDERRORS = 750;
 	
 	/**
 	 * Generates a corpus of Summary objects at both the Record and Volume
@@ -93,9 +93,16 @@ public class RecAndVolCorpus {
 				// as an array rather than a HashMap. Optimization -- possibly premature optimization,
 				// but there you have it.
 				for (int i = 0; i < numFeatures; ++i) {
-					Double value = (double) volWordcounts.get(featureSequence.get(i));
-					if (value == null) vector[i] = 0d;
-					else vector[i] = value; 
+					try {
+						Integer value = volWordcounts.get(featureSequence.get(i));
+						if (value == null) vector[i] = 0d;
+						else vector[i] = (double) value; 
+					}
+					catch (NullPointerException e) {
+						System.out.println("Null pointer in retrieval from wordcount map!");
+						System.out.println(i);
+						System.out.println(featureSequence.get(i));
+					}
 				}
 				
 				Summary newSummary = new Summary(vol, vector);

@@ -53,7 +53,7 @@ public class Volume {
 		
 		String wordcount = metadataValues.get("totalwords");
 		if (wordcount != null) {
-			numWords = Integer.parseInt(pagecount);
+			numWords = Integer.parseInt(wordcount);
 		}
 
 		// If those fields are not read from the metadata file, they

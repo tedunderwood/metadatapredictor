@@ -50,7 +50,7 @@ public class TaubMetadataReader extends MetadataReader {
 					for (int i = 0; i < fields.length; ++ i) {
 						String thisfield = fields[i];
 						for (int j = 0; j < numColumns; ++j) {
-							if (tokens[j] == thisfield) {
+							if (tokens[j].equals(thisfield)) {
 								columnsToRead[i] = j;
 								counter += 1;
 							}
@@ -61,6 +61,10 @@ public class TaubMetadataReader extends MetadataReader {
 						// We did not find all our fields in the columns.
 						InputFileException cause = new InputFileException("TaubMetadataReader cannot find some fields" +
 								" it is assigned in file header.");
+						System.out.println(line);
+						System.out.println(numColumns);
+						System.out.println("counter " + Integer.toString(counter));
+						System.out.println("fields.length " + Integer.toString(fields.length));
 						throw cause;
 					}
 				}
@@ -76,8 +80,8 @@ public class TaubMetadataReader extends MetadataReader {
 					String htid = tokens[0];
 					// We assume that the volume ID is in the first column of the table.
 					
-					HashMap metadataValues = new HashMap<String, String>();
-					for (int i = 0; i < numColumns; ++ i) {
+					HashMap<String, String> metadataValues = new HashMap<String, String>();
+					for (int i = 0; i < fields.length; ++ i) {
 						metadataValues.put(fields[i], tokens[columnsToRead[i]]);
 						// The names of fields are in fields. columnsToRead indexes
 						// the location of each field in the header line, thus it
