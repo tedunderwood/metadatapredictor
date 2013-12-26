@@ -1,7 +1,6 @@
 package datasets;
 
 import java.util.Arrays;
-import datasets.InputFileException;
 
 /**
  * As the name implies, this is a an all-purpose utility containing
