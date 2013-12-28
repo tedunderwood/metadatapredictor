@@ -8,20 +8,25 @@ public class Summary {
 	public String label;
 	double[] features;
 	ArrayList<String> volumesInRecord;
-	int numWords;
-	public String title;
+	public int numWords;
+	String title;
 	public String author;
 	String recordID;
+	int pointer;
 	
 	public Summary(Volume vol, double[] vector) {
 		features = vector;
 		label = vol.htid;
 		title = vol.getValue("title");
 		author = vol.getValue("author");
-		recordID = vol.getValue("recordID");
+		recordID = vol.getValue("recordid");
 		numWords = vol.getNumWords();
 		volumesInRecord = new ArrayList<String>(1);
 		volumesInRecord.add(label);
+	}
+	
+	public void setPointer(int value){
+		pointer = value;
 	}
 	
 	public Summary(String label, int numFeatures, ArrayList<Summary> volumeList) {
@@ -56,5 +61,17 @@ public class Summary {
 	
 	public int getNumWords() {
 		return numWords;
+	}
+	
+	public String normalizedTitle() {
+		return title.toLowerCase();
+	}
+	
+	public String normalizedAuthor() {
+		return author.toLowerCase();
+	}
+	
+	public String outputName() {
+		return (label + "\t" + author + "\t" + title);
 	}
 }

@@ -1,10 +1,8 @@
 package deduplication;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 import java.util.HashSet;
 import java.util.HashMap;
 
@@ -39,10 +37,10 @@ public class RecAndVolCorpus {
 	ArrayList<Summary> summaries;
 	public int numDocuments;
 	ArrayList<Connection> connections;
-	static final int WINDOW = 6000;
-	static final double THRESHOLD = 0.98;
+	static final int WINDOW = 5000;
+	static final double THRESHOLD = 0.994;
 	
-	static final int ALLOWEDERRORS = 750;
+	static final int ALLOWEDERRORS = 2500;
 	
 	/**
 	 * Generates a corpus of Summary objects at both the Record and Volume
@@ -79,7 +77,7 @@ public class RecAndVolCorpus {
 			String volID = vol.htid;
 			HashMap<String, Integer> volWordcounts = wordcounts.get(volID);
 			if (volWordcounts == null) {
-				WarningLogger.logWarning("Could not find " + vol.htid);
+				WarningLogger.logWarning("Could not find\t" + vol.htid);
 				numberOfErrors += 1;
 				if (numberOfErrors > ALLOWEDERRORS) {
 					throw new RuntimeException("Error allowance exceeded.");
@@ -109,11 +107,15 @@ public class RecAndVolCorpus {
 				
 				summaries.add(newSummary);
 			}
-			makeRecordSummaries(numFeatures);
-
-			numDocuments = summaries.size();
 		}
+			
+		System.out.println("Created " + Integer.toString(summaries.size()) + " vol-level Summary objects. Now for records.");
+			
+		makeRecordSummaries(numFeatures);
+
+		numDocuments = summaries.size();
 	}
+
 
 	/**
 	 * Generates a corpus of Summary objects at both the Record and Volume
@@ -214,30 +216,42 @@ public class RecAndVolCorpus {
 		}
 	}
 	
-	public void deduplicateCorpus() {
+	/**
+	 * Checks volume and record-level Summaries for substantial identity with each other,
+	 * using cosine similarity.
+	 * @param limit Maximum number of volumes to check. If set to zero, check all.
+	 */
+	public void deduplicateCorpus(int limit) {
 		connections = new ArrayList<Connection>();
+		if (limit < 1 | limit > numDocuments) limit = numDocuments;
+		// This only controls the outer loop. The inner loop covers the whole corpus,
+		// even if the outer loop doesn't/
+		
 		int startInnerLoop = 0;
-		// The logic of these loops is that we want to create a triangular
+		// The inner loop has a different size each time, to create a triangular
 		// matrix. If x has been compared to y we don't need to compare
 		// y to x. So when the outer loop has completed a row,
 		// we take it out of consideration as a column.
 		
-		for (int i = 0; i < numDocuments; ++ i) {
+		for (int i = 0; i < limit; ++ i) {
 			Summary firstDocument = summaries.get(i);
 			startInnerLoop += 1;
+			if (startInnerLoop % 100 == 1) System.out.println(startInnerLoop);
+			if (firstDocument.numWords < 10000) continue;
+			
 			
 			for (int j = startInnerLoop; j < numDocuments; ++j) {
 				Summary secondDocument = summaries.get(j);
 				int difference = firstDocument.getNumWords() - secondDocument.getNumWords();
 				if (difference > -WINDOW & difference < WINDOW) {
-					if (firstDocument.recordID == secondDocument.recordID) {
+					if (firstDocument.recordID.equals(secondDocument.recordID)) {
 						continue;
 					}
 					double cossim = cosineSimilarity(firstDocument.getFeatures(), 
 							secondDocument.getFeatures());
 					if (cossim > THRESHOLD) {
-						double titlematch = jaccardSimilarity(firstDocument.title, secondDocument.title);
-						double authormatch = jaccardSimilarity(firstDocument.author, secondDocument.author);
+						double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
+						double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
 						Connection thisConnection = new Connection(firstDocument, secondDocument, cossim, 
 								titlematch, authormatch);
 						connections.add(thisConnection);
@@ -252,8 +266,18 @@ public class RecAndVolCorpus {
 		Collections.sort(connections);
 		return connections;
 	}
-				
-	private double cosineSimilarity(double[] first, double[] second) {
+	
+	public static double probSummariesIdentical(Summary firstDocument, Summary secondDocument) {
+		double cossim = cosineSimilarity(firstDocument.getFeatures(), secondDocument.getFeatures());
+		double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
+		double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
+		// This applies coefficients learned through logistic regression. -1897 is the intercept.
+		double exponent = (1899 * cossim) + (7.5 * titlematch) + (0.7 * authormatch) - 1897;
+		return 1 / (1 + Math.exp(-exponent));
+		// that's the logit function	
+	}
+	
+	private static double cosineSimilarity(double[] first, double[] second) {
 		int vectorLength = first.length;
 		assert(first.length == second.length);
 		double dotProduct = 0d;
@@ -267,35 +291,36 @@ public class RecAndVolCorpus {
 		firstMagnitude = Math.sqrt(firstMagnitude);
 		secondMagnitude = Math.sqrt(secondMagnitude);
 		double denominator = (firstMagnitude * secondMagnitude);
-		if (denominator == 0) {
+		if (denominator < 1000) {
 			return 0d;
+			// The logic here is twofold. A) We want to avoid division by zero.
+			// More importantly B) We want to ignore very short documents, or
+			// documents lacking English words.
 		}
 		else {
 			return dotProduct / denominator;
 		}
 	}
 	
-	private double jaccardSimilarity(String first, String second) {
-		first = first.toLowerCase();
-		second = second.toLowerCase();
-		String[] firstset = first.split(" ");
-		String[] secondset = second.split(" ");
-		Set<String> s1 = new HashSet<String>(Arrays.asList(firstset));
-		Set<String> s2 = new HashSet<String>(Arrays.asList(secondset));
-		
-		Set<String> union = new HashSet<String>(s1);
-		union.addAll(s2);
-
-		Set<String> intersection = new HashSet<String>(s1);
-		intersection.retainAll(s2);
-		
-		if (union.size() == 0) {
-			return 0;
-		}
-		else {
-			return intersection.size() / union.size();
-		}
-	}
+//	private double jaccardSimilarity(String first, String second) {
+//		String[] firstset = first.toLowerCase().split("\\s+");
+//		String[] secondset = second.toLowerCase().split("\\s+");
+//		Set<String> s1 = new HashSet<String>(Arrays.asList(firstset));
+//		Set<String> s2 = new HashSet<String>(Arrays.asList(secondset));
+//		
+//		Set<String> union = new HashSet<String>(s1);
+//		union.addAll(s2);
+//
+//		Set<String> intersection = new HashSet<String>(s1);
+//		intersection.retainAll(s2);
+//		
+//		if (union.size() == 0) {
+//			return 0;
+//		}
+//		else {
+//			return intersection.size() / union.size();
+//		}
+//	}
 		
 }
 
