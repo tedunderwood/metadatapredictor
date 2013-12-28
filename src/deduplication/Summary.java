@@ -59,6 +59,10 @@ public class Summary {
 		return features;
 	}
 	
+	public void setFeatures(double[] vector) {
+		features = vector;
+	}
+	
 	public int getNumWords() {
 		return numWords;
 	}

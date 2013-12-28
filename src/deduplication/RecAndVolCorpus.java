@@ -37,8 +37,13 @@ public class RecAndVolCorpus {
 	ArrayList<Summary> summaries;
 	public int numDocuments;
 	ArrayList<Connection> connections;
-	static final int WINDOW = 5000;
-	static final double THRESHOLD = 0.994;
+	Map<Integer, ArrayList<Summary>> blocks;
+	Map<String, Double> averageFeatureFreqs;
+	ArrayList<String> featureSequence;
+	int numFeatures;
+	
+	static final int WINDOW = 4000;
+	static final double THRESHOLD = 0.985;
 	
 	static final int ALLOWEDERRORS = 2500;
 	
@@ -61,12 +66,20 @@ public class RecAndVolCorpus {
 		int numberOfErrors = 0;
 		// This counter keeps track of the number of errors so far.
 		
-		ArrayList<String> featureSequence = new ArrayList<String>();
+		featureSequence = new ArrayList<String>();
+		averageFeatureFreqs = new HashMap<String, Double>();
+		// We're going to average feature frequencies in the first 200 volumes to
+		// create a normalizing denominator.
+		
 		for (String feature : features) {
 			featureSequence.add(feature);
+			averageFeatureFreqs.put(feature, 1d);
+			// 1 because Laplacian correction.
 		}
-		int numFeatures = featureSequence.size();
+		numFeatures = featureSequence.size();
+		
 		summaries = new ArrayList<Summary>();
+		int counter = 0;
 		
 		ArrayList<Volume> volumes = collection.getVolumes();
 		// The basic strategy here is to iterate over volumes in the collection,
@@ -85,6 +98,7 @@ public class RecAndVolCorpus {
 			}
 			else {
 				double[] vector = new double[numFeatures];
+				counter += 1;
 				// The VolumeReader is designed to produce Document objects for a generic classification
 				// process. But in the Deduplication package we have a different task and are using
 				// Summary objects -- the main difference being that feature values are stored simply
@@ -95,6 +109,12 @@ public class RecAndVolCorpus {
 						Integer value = volWordcounts.get(featureSequence.get(i));
 						if (value == null) vector[i] = 0d;
 						else vector[i] = (double) value; 
+						
+						if (counter < 200) {
+							double currentCount = averageFeatureFreqs.get(featureSequence.get(i));
+							currentCount += vector[i];
+							averageFeatureFreqs.put(featureSequence.get(i), currentCount);
+						}
 					}
 					catch (NullPointerException e) {
 						System.out.println("Null pointer in retrieval from wordcount map!");
@@ -106,6 +126,7 @@ public class RecAndVolCorpus {
 				Summary newSummary = new Summary(vol, vector);
 				
 				summaries.add(newSummary);
+				
 			}
 		}
 			
@@ -114,6 +135,30 @@ public class RecAndVolCorpus {
 		makeRecordSummaries(numFeatures);
 
 		numDocuments = summaries.size();
+		
+		// In spite of its name, averageFeatureFreqs currently contains
+		// sums rather than averages. It needs division to rectify this.
+		for (String key : averageFeatureFreqs.keySet()) {
+			double averageValue = averageFeatureFreqs.get(key) / 200d;
+			averageFeatureFreqs.put(key, averageValue);
+			System.out.println(key + " " + Double.toString(averageValue));
+		}
+	}
+	
+	public void normalizeSummaries() {
+		for (Summary thisSum : summaries) {
+			double[] vector = thisSum.getFeatures();
+			assert (vector.length == numFeatures);
+			
+			for (int i = 0; i < numFeatures; ++i) {
+				vector[i] = vector[i] / averageFeatureFreqs.get(featureSequence.get(i));
+			}
+			
+			thisSum.setFeatures(vector);
+			// for (Double value : vector) {
+			// 	System.out.println(Double.toString(value));
+			// } 
+		}
 	}
 
 
@@ -217,6 +262,101 @@ public class RecAndVolCorpus {
 	}
 	
 	/**
+	 * This method divides the list of Summaries up by the number of words they contain,
+	 * in order to accelerate the search for duplicate volumes. We divide the range of
+	 * possible lengths into 4000-word blocks. To avoid possible edge effects, we add each volume 
+	 * both to its own block and to those immediately above and below.
+	 * 
+	 */
+	public void cacheWindows() {
+		
+		blocks = new HashMap<Integer, ArrayList<Summary>>();
+		
+		for (Summary doc : summaries) {
+			int blockIdx = doc.numWords / 4000;
+			ArrayList<Summary> homeGroup = blocks.get(blockIdx);
+			if (homeGroup == null) {
+				ArrayList<Summary> newList = new ArrayList<Summary>();
+				newList.add(doc);
+				blocks.put(blockIdx, newList);
+			}
+			else {
+				homeGroup.add(doc);
+			}
+			if (blockIdx > 0) {
+				ArrayList<Summary> oneDown = blocks.get(blockIdx - 1);
+				if (oneDown == null) {
+					ArrayList<Summary> newList = new ArrayList<Summary>();
+					newList.add(doc);
+					blocks.put(blockIdx - 1, newList);
+				}
+				else {
+					oneDown.add(doc);
+				}
+			}
+			ArrayList<Summary> oneUp = blocks.get(blockIdx + 1);
+			if (oneUp == null) {
+				ArrayList<Summary> newList = new ArrayList<Summary>();
+				newList.add(doc);
+				blocks.put(blockIdx + 1, newList);
+			}
+			else {
+				oneUp.add(doc);
+			}
+			
+		}
+	}
+	
+	/**
+	 * Checks volume and record-level Summaries for substantial identity with each other,
+	 * using cosine similarity. Uses cached blocks to accelerate iteration, thus "Faster."
+	 * @param limit Maximum number of volumes to check. If set to zero, check all.
+	 */
+	public void deduplicateFaster(int limit) {
+		this.cacheWindows();
+		connections = new ArrayList<Connection>();
+		
+		if (limit < 1 | limit > numDocuments) limit = numDocuments;
+		// This only controls the outer loop.
+
+		HashSet<Summary> alreadyChecked = new HashSet<Summary>();
+		int counter = 0;
+		
+		for (int i = 0; i < limit; ++i) {
+			Summary firstDocument = summaries.get(i);
+			alreadyChecked.add(firstDocument);
+			if (counter % 100 == 1) System.out.println(counter);
+			counter += 1;
+			
+			if (firstDocument.numWords < 10000) continue;
+			
+			int blockIdx = firstDocument.numWords / 4000;
+			ArrayList<Summary> window = blocks.get(blockIdx);
+			
+			for (Summary secondDocument : window) {
+				if (alreadyChecked.contains(secondDocument)) continue;
+				int difference = firstDocument.getNumWords() - secondDocument.getNumWords();
+				if (difference > -WINDOW & difference < WINDOW) {
+					if (firstDocument.recordID.equals(secondDocument.recordID)) {
+						continue;
+					}
+					double cossim = cosineSimilarity(firstDocument.getFeatures(), 
+							secondDocument.getFeatures());
+					// System.out.println(cossim);
+					if (cossim > THRESHOLD) {
+						double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
+						double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
+						Connection thisConnection = new Connection(firstDocument, secondDocument, cossim, 
+								titlematch, authormatch);
+						connections.add(thisConnection);
+					}
+				
+				}
+			}
+		}
+	}
+	
+	/**
 	 * Checks volume and record-level Summaries for substantial identity with each other,
 	 * using cosine similarity.
 	 * @param limit Maximum number of volumes to check. If set to zero, check all.
@@ -269,10 +409,11 @@ public class RecAndVolCorpus {
 	
 	public static double probSummariesIdentical(Summary firstDocument, Summary secondDocument) {
 		double cossim = cosineSimilarity(firstDocument.getFeatures(), secondDocument.getFeatures());
-		double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
-		double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
-		// This applies coefficients learned through logistic regression. -1897 is the intercept.
-		double exponent = (1899 * cossim) + (7.5 * titlematch) + (0.7 * authormatch) - 1897;
+		// double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
+		// double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
+		// This applies coefficients learned through logistic regression.
+		// I no longer use title or author, because they caused spurious connections.
+		double exponent = (56.589 * cossim) - 55.559;
 		return 1 / (1 + Math.exp(-exponent));
 		// that's the logit function	
 	}
@@ -291,7 +432,7 @@ public class RecAndVolCorpus {
 		firstMagnitude = Math.sqrt(firstMagnitude);
 		secondMagnitude = Math.sqrt(secondMagnitude);
 		double denominator = (firstMagnitude * secondMagnitude);
-		if (denominator < 1000) {
+		if (denominator < 0.1) {
 			return 0d;
 			// The logic here is twofold. A) We want to avoid division by zero.
 			// More importantly B) We want to ignore very short documents, or

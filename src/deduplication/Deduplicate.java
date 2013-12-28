@@ -71,7 +71,13 @@ public class Deduplicate {
 		RecAndVolCorpus corpus = new RecAndVolCorpus(metadata, features, wordcounts);
 		System.out.println("Created corpus of volume and record-level objects to compare.");
 		
-		corpus.deduplicateCorpus(0);
+		corpus.normalizeSummaries();
+		// Normalizes the feature vector by dividing it by the average frequency of each feature.
+		// This is more aggressive normalization than tf-idf, but for our purposes there is really
+		// no reason to give common words more weight than uncommon ones. Doing so tends to group
+		// different works by the same author, and we don't want to do that.
+		
+		corpus.deduplicateFaster(0);
 		// That's where the actual work of detecting connections takes place.
 		// Setting the limit to zero causes it to work on the whole collection.
 		System.out.println("Deduplicated the corpus.");

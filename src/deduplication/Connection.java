@@ -18,8 +18,8 @@ public class Connection implements Comparable<Connection> {
 	}
 	
 	private double calculateProbability() {
-		// This applies coefficients learned through logistic regression. -1897 is the intercept.
-		double exponent = (1899 * cossim) + (7.5 * titlematch) + (0.7 * authormatch) - 1897;
+		// This applies coefficients learned through logistic regression.
+		double exponent = (56.589 * cossim) - 55.559;
 		return 1 / (1 + Math.exp(-exponent));
 		// that's the logit function
 	}

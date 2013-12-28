@@ -9,6 +9,7 @@ public class HierarchicalClusters {
 	ArrayList<Connection> connections;
 	ArrayList<HashSet<Summary>> clusters;
 	double CUTOFF = 0.6;
+	int SIZEDIFF = 4000;
 	
 	public HierarchicalClusters(ArrayList<Summary> summaries, ArrayList<Connection> connections) {
 		clusters = new ArrayList<HashSet<Summary>>();
@@ -76,14 +77,20 @@ public class HierarchicalClusters {
 				nullifyRecordmembers(second);
 			}
 			else {
-				// if the clusters have more than two members we need to check that the average linkage is actually
-				// consistent with a merge
+				// If the clusters have more than two members we need to check that the average linkage is actually
+				// consistent with a merge. Note that this has already been checked for connections between single
+				// Summary objects. In the process we also
 				Iterator<Summary> iter1 = firstMembers.iterator();
-				Iterator<Summary> iter2 = secondMembers.iterator();
+
 				ArrayList<Double> allLinkages = new ArrayList<Double>();
+				ArrayList<Integer> firstSizes = new ArrayList<Integer>();
+				ArrayList<Integer> secondSizes = new ArrayList<Integer>();
 				
 				while (iter1.hasNext()) {
 					Summary outer = iter1.next();
+					firstSizes.add(outer.numWords);
+					Iterator<Summary> iter2 = secondMembers.iterator();
+					
 					while (iter2.hasNext()) {
 						Summary inner = iter2.next();
 						Double probability = RecAndVolCorpus.probSummariesIdentical(outer, inner);
@@ -91,16 +98,39 @@ public class HierarchicalClusters {
 					}
 				}
 				
-				int counter = 0;
+				Iterator<Summary> iter2 = secondMembers.iterator();
+				while (iter2.hasNext()) {
+					Summary thisSum = iter2.next();
+					secondSizes.add(thisSum.numWords);
+				}
+				
 				double sumProb = 0d;
 				for (Double linkProb : allLinkages) {
 					sumProb += linkProb;
-					counter += 1;
 				}
-				double meanProb = sumProb / counter;
+				double meanProb = sumProb / allLinkages.size();
 				
-				if (meanProb < CUTOFF) continue;
+				int sumFirstSize = 0;
+				for (int size : firstSizes) {
+					sumFirstSize += size;
+				}
+				double meanFirstSize = sumFirstSize / (double)firstSizes.size();
+				
+				int sumSecondSize = 0;
+				for (int size : secondSizes) {
+					sumSecondSize += size;
+				}
+				double meanSecondSize = sumSecondSize / (double)secondSizes.size();
+				
+				int newGroupSize = (firstMembers.size() + secondMembers.size());
+				
+				if (meanProb < CUTOFF + (.005 * newGroupSize)) continue;
 				// This is the decision point.
+				// Teensy bit of a hack here: I make joining groups less probable
+				// as the groups grow larger. A group of 20 vols will have a penalty of
+				// 10% probability compared to a group of 2.
+				
+				if (Math.abs(meanFirstSize - meanSecondSize) > SIZEDIFF) continue;
 				
 				else {
 					Iterator<Summary> toAdd = secondMembers.iterator();
