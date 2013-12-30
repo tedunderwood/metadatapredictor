@@ -21,9 +21,11 @@ public class Deduplicate {
 		// A setting of (false, "") would set the logger to write them to
 		// console.
 		
+		int CORPUSSIZE = 0;
+		
 		String metadataSource = "/Users/tunderwood/deduplication/metadata.tsv";
-		String featureSource = "/Users/tunderwood/deduplication/40words.txt";
-		String dataSource = "/Users/tunderwood/deduplication/sparsetables";
+		String featureSource = "/Users/tunderwood/deduplication/105words.txt";
+		String dataSource = "/Users/tunderwood/deduplication/105wordtables";
 		String outputPath = "/Users/tunderwood/deduplication/connections.txt";
 		String clusterPath = "/Users/tunderwood/deduplication/clusters.txt";
 		
@@ -77,7 +79,7 @@ public class Deduplicate {
 		// no reason to give common words more weight than uncommon ones. Doing so tends to group
 		// different works by the same author, and we don't want to do that.
 		
-		corpus.deduplicateFaster(0);
+		corpus.deduplicateFaster(CORPUSSIZE);
 		// That's where the actual work of detecting connections takes place.
 		// Setting the limit to zero causes it to work on the whole collection.
 		System.out.println("Deduplicated the corpus.");
@@ -97,17 +99,17 @@ public class Deduplicate {
 		output.send(outputLines);
 		
 		HierarchicalClusters fusion = new HierarchicalClusters(corpus.summaries, corpus.connections);
-		ArrayList<HashSet<Summary>> clusters = fusion.sortClustersBySize();
+		ArrayList<Cluster> clusters = fusion.sortClustersByCoherence();
 		
 		LineWriter outputStream = new LineWriter(clusterPath, true);
 		int counter = 0;
 				
-		for (HashSet<Summary> cluster : clusters) {
-			if (cluster.size() > 1) {
-				outputStream.print(Integer.toString(counter));
+		for (Cluster cluster : clusters) {
+			if (cluster.sizeOfCluster > 1) {
+				outputStream.print(Integer.toString(counter) + "\t" + Double.toString(cluster.coherence));
 				outputCluster(outputStream, cluster);
+				counter += 1;
 			}
-			counter += 1;
 		}
 	}
 	
@@ -115,8 +117,8 @@ public class Deduplicate {
 	    return Arrays.toString(e.getStackTrace());
 	}
 	
-	private static void outputCluster(LineWriter out, HashSet<Summary> cluster) {
-		Iterator<Summary> iterateCluster = cluster.iterator();
+	private static void outputCluster(LineWriter out, Cluster cluster) {
+		Iterator<Summary> iterateCluster = cluster.thisCluster.iterator();
 		while (iterateCluster.hasNext()) {
 			Summary next = iterateCluster.next();
 			out.print(next.outputName());

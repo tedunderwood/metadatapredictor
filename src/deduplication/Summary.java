@@ -6,6 +6,7 @@ import datasets.Volume;
 
 public class Summary {
 	public String label;
+	double[] rawfeatures;
 	double[] features;
 	ArrayList<String> volumesInRecord;
 	public int numWords;
@@ -15,7 +16,7 @@ public class Summary {
 	int pointer;
 	
 	public Summary(Volume vol, double[] vector) {
-		features = vector;
+		rawfeatures = vector;
 		label = vol.htid;
 		title = vol.getValue("title");
 		author = vol.getValue("author");
@@ -31,14 +32,14 @@ public class Summary {
 	
 	public Summary(String label, int numFeatures, ArrayList<Summary> volumeList) {
 		this.label = label;
-		features = new double[numFeatures];
+		rawfeatures = new double[numFeatures];
 		volumesInRecord = new ArrayList<String>(numFeatures);
 		numWords = 0;
 		
 		for (Summary vol : volumeList) {
-			double[] nextVector = vol.getFeatures();
+			double[] nextVector = vol.rawfeatures;
 			for (int i = 0; i < numFeatures; ++i) {
-				features[i] += nextVector[i];
+				rawfeatures[i] += nextVector[i];
 			}
 			numWords += vol.getNumWords();
 			volumesInRecord.add(vol.label);
@@ -77,5 +78,13 @@ public class Summary {
 	
 	public String outputName() {
 		return (label + "\t" + author + "\t" + title);
+	}
+	
+	public double sumOfRawFeatures() {
+		double result = 0d;
+		for (double feature : rawfeatures) {
+			result += feature;
+		}
+		return result;
 	}
 }

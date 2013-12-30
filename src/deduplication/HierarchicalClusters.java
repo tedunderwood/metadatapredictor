@@ -8,12 +8,13 @@ public class HierarchicalClusters {
 	ArrayList<Summary> summaries;
 	ArrayList<Connection> connections;
 	ArrayList<HashSet<Summary>> clusters;
-	double CUTOFF = 0.6;
-	int SIZEDIFF = 4000;
+	double CUTOFF = 0.90;
+	int SIZEDIFF;
 	
 	public HierarchicalClusters(ArrayList<Summary> summaries, ArrayList<Connection> connections) {
 		clusters = new ArrayList<HashSet<Summary>>();
 		this.summaries = summaries;
+		SIZEDIFF = RecAndVolCorpus.WINDOW;
 		
 		// Maps summary objects to clusters. To begin with each summary points to its own index
 		// in this list. When a connection is made, one cluster gets emptied and added to the other.
@@ -77,12 +78,13 @@ public class HierarchicalClusters {
 				nullifyRecordmembers(second);
 			}
 			else {
-				// If the clusters have more than two members we need to check that the average linkage is actually
-				// consistent with a merge. Note that this has already been checked for connections between single
-				// Summary objects. In the process we also
+				// If the clusters have more than two members we use the "maximum linkage" method to decide whether 
+				// to merge them. In other words, the deciding criterion is the *least* probable connection.
+				
+				double minProb = 1d;
+				
 				Iterator<Summary> iter1 = firstMembers.iterator();
 
-				ArrayList<Double> allLinkages = new ArrayList<Double>();
 				ArrayList<Integer> firstSizes = new ArrayList<Integer>();
 				ArrayList<Integer> secondSizes = new ArrayList<Integer>();
 				
@@ -93,8 +95,9 @@ public class HierarchicalClusters {
 					
 					while (iter2.hasNext()) {
 						Summary inner = iter2.next();
-						Double probability = RecAndVolCorpus.probSummariesIdentical(outer, inner);
-						allLinkages.add(probability);
+						Connection temporaryConn = new Connection(outer, inner);
+						Double probability = temporaryConn.calculateProbability();
+						if (probability < minProb) minProb = probability;
 					}
 				}
 				
@@ -103,12 +106,6 @@ public class HierarchicalClusters {
 					Summary thisSum = iter2.next();
 					secondSizes.add(thisSum.numWords);
 				}
-				
-				double sumProb = 0d;
-				for (Double linkProb : allLinkages) {
-					sumProb += linkProb;
-				}
-				double meanProb = sumProb / allLinkages.size();
 				
 				int sumFirstSize = 0;
 				for (int size : firstSizes) {
@@ -122,13 +119,8 @@ public class HierarchicalClusters {
 				}
 				double meanSecondSize = sumSecondSize / (double)secondSizes.size();
 				
-				int newGroupSize = (firstMembers.size() + secondMembers.size());
-				
-				if (meanProb < CUTOFF + (.005 * newGroupSize)) continue;
+				if (minProb < CUTOFF) continue;
 				// This is the decision point.
-				// Teensy bit of a hack here: I make joining groups less probable
-				// as the groups grow larger. A group of 20 vols will have a penalty of
-				// 10% probability compared to a group of 2.
 				
 				if (Math.abs(meanFirstSize - meanSecondSize) > SIZEDIFF) continue;
 				
@@ -164,6 +156,18 @@ public class HierarchicalClusters {
 		});
 		return clusters;
 	}
+	
+	public ArrayList<Cluster> sortClustersByCoherence() {
+		ArrayList<Cluster> sortingList = new ArrayList<Cluster>();
+		for (HashSet<Summary> thisSet : clusters) {
+			Cluster newCluster = new Cluster(thisSet);
+			sortingList.add(newCluster);
+		}
+		Collections.sort(sortingList);
+	
+		return sortingList;
+	}
+
 	
 	private boolean okayToMove(HashSet<Summary> thisSet, HashSet<String> volumesHaveBeenMoved) {
 		if (thisSet.size() > 1) return true;

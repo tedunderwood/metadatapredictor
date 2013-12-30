@@ -43,7 +43,8 @@ public class RecAndVolCorpus {
 	int numFeatures;
 	
 	static final int WINDOW = 4000;
-	static final double THRESHOLD = 0.985;
+	static final double FIRSTTHRESHOLD = 0.95;
+	static final double HARDTHRESHOLD = 0.90;
 	
 	static final int ALLOWEDERRORS = 2500;
 	
@@ -147,8 +148,10 @@ public class RecAndVolCorpus {
 	
 	public void normalizeSummaries() {
 		for (Summary thisSum : summaries) {
-			double[] vector = thisSum.getFeatures();
-			assert (vector.length == numFeatures);
+			double[] vector = new double[numFeatures];
+			for (int i = 0; i < numFeatures; ++i) {
+				vector[i] = thisSum.rawfeatures[i];
+			}
 			
 			for (int i = 0; i < numFeatures; ++i) {
 				vector[i] = vector[i] / averageFeatureFreqs.get(featureSequence.get(i));
@@ -271,8 +274,13 @@ public class RecAndVolCorpus {
 	public void cacheWindows() {
 		
 		blocks = new HashMap<Integer, ArrayList<Summary>>();
+		int skipped = 0;
 		
 		for (Summary doc : summaries) {
+			if (doc.sumOfRawFeatures() < 1000) {
+				skipped += 1;
+				continue;
+			}
 			int blockIdx = doc.numWords / 4000;
 			ArrayList<Summary> homeGroup = blocks.get(blockIdx);
 			if (homeGroup == null) {
@@ -305,11 +313,16 @@ public class RecAndVolCorpus {
 			}
 			
 		}
+		System.out.println("Skipped " + skipped + " documents as too small.");
 	}
 	
 	/**
 	 * Checks volume and record-level Summaries for substantial identity with each other,
 	 * using cosine similarity. Uses cached blocks to accelerate iteration, thus "Faster."
+	 * 
+	 * If volumes have a reasonably close match according to cossim, it also checks Euclidean
+	 * distance, in order to use that as further evidence.
+	 * 
 	 * @param limit Maximum number of volumes to check. If set to zero, check all.
 	 */
 	public void deduplicateFaster(int limit) {
@@ -325,9 +338,11 @@ public class RecAndVolCorpus {
 		for (int i = 0; i < limit; ++i) {
 			Summary firstDocument = summaries.get(i);
 			alreadyChecked.add(firstDocument);
+			
 			if (counter % 100 == 1) System.out.println(counter);
 			counter += 1;
 			
+			if (firstDocument.sumOfRawFeatures() < 1000) continue;
 			if (firstDocument.numWords < 10000) continue;
 			
 			int blockIdx = firstDocument.numWords / 4000;
@@ -340,108 +355,109 @@ public class RecAndVolCorpus {
 					if (firstDocument.recordID.equals(secondDocument.recordID)) {
 						continue;
 					}
-					double cossim = cosineSimilarity(firstDocument.getFeatures(), 
-							secondDocument.getFeatures());
-					// System.out.println(cossim);
-					if (cossim > THRESHOLD) {
-						double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
-						double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
-						Connection thisConnection = new Connection(firstDocument, secondDocument, cossim, 
-								titlematch, authormatch);
-						connections.add(thisConnection);
+					
+					Connection tentativeConnection = new Connection(firstDocument, secondDocument);
+					double cossim = tentativeConnection.cossim;
+
+					if (cossim > FIRSTTHRESHOLD) {
+						double probability = tentativeConnection.calculateProbability();
+						
+						if (probability > HARDTHRESHOLD) {
+							connections.add(tentativeConnection);
+						}
 					}
 				
-				}
-			}
-		}
-	}
+				} // end check whether this pair is in WINDOW
+			} // end iterate across window
+		} // end outer loop
+	} // end method body
 	
-	/**
-	 * Checks volume and record-level Summaries for substantial identity with each other,
-	 * using cosine similarity.
-	 * @param limit Maximum number of volumes to check. If set to zero, check all.
-	 */
-	public void deduplicateCorpus(int limit) {
-		connections = new ArrayList<Connection>();
-		if (limit < 1 | limit > numDocuments) limit = numDocuments;
-		// This only controls the outer loop. The inner loop covers the whole corpus,
-		// even if the outer loop doesn't/
-		
-		int startInnerLoop = 0;
-		// The inner loop has a different size each time, to create a triangular
-		// matrix. If x has been compared to y we don't need to compare
-		// y to x. So when the outer loop has completed a row,
-		// we take it out of consideration as a column.
-		
-		for (int i = 0; i < limit; ++ i) {
-			Summary firstDocument = summaries.get(i);
-			startInnerLoop += 1;
-			if (startInnerLoop % 100 == 1) System.out.println(startInnerLoop);
-			if (firstDocument.numWords < 10000) continue;
-			
-			
-			for (int j = startInnerLoop; j < numDocuments; ++j) {
-				Summary secondDocument = summaries.get(j);
-				int difference = firstDocument.getNumWords() - secondDocument.getNumWords();
-				if (difference > -WINDOW & difference < WINDOW) {
-					if (firstDocument.recordID.equals(secondDocument.recordID)) {
-						continue;
-					}
-					double cossim = cosineSimilarity(firstDocument.getFeatures(), 
-							secondDocument.getFeatures());
-					if (cossim > THRESHOLD) {
-						double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
-						double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
-						Connection thisConnection = new Connection(firstDocument, secondDocument, cossim, 
-								titlematch, authormatch);
-						connections.add(thisConnection);
-					}
-				
-				}
-			}
-		}
-	}
+//	/**  DEPRECATED 12-29-2013
+//	 * Checks volume and record-level Summaries for substantial identity with each other,
+//	 * using cosine similarity.
+//	 * @param limit Maximum number of volumes to check. If set to zero, check all.
+//	 */
+//	public void deduplicateCorpus(int limit) {
+//		connections = new ArrayList<Connection>();
+//		if (limit < 1 | limit > numDocuments) limit = numDocuments;
+//		// This only controls the outer loop. The inner loop covers the whole corpus,
+//		// even if the outer loop doesn't/
+//		
+//		int startInnerLoop = 0;
+//		// The inner loop has a different size each time, to create a triangular
+//		// matrix. If x has been compared to y we don't need to compare
+//		// y to x. So when the outer loop has completed a row,
+//		// we take it out of consideration as a column.
+//		
+//		for (int i = 0; i < limit; ++ i) {
+//			Summary firstDocument = summaries.get(i);
+//			startInnerLoop += 1;
+//			if (startInnerLoop % 100 == 1) System.out.println(startInnerLoop);
+//			if (firstDocument.numWords < 10000) continue;
+//			
+//			
+//			for (int j = startInnerLoop; j < numDocuments; ++j) {
+//				Summary secondDocument = summaries.get(j);
+//				int difference = firstDocument.getNumWords() - secondDocument.getNumWords();
+//				if (difference > -WINDOW & difference < WINDOW) {
+//					if (firstDocument.recordID.equals(secondDocument.recordID)) {
+//						continue;
+//					}
+//					double cossim = cosineSimilarity(firstDocument.getFeatures(), 
+//							secondDocument.getFeatures());
+//					if (cossim > THRESHOLD) {
+//						double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
+//						double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
+//						Connection thisConnection = new Connection(firstDocument, secondDocument, cossim, 
+//								titlematch, authormatch);
+//						connections.add(thisConnection);
+//					}
+//				
+//				}
+//			}
+//		}
+//	}
 	
 	public ArrayList<Connection> getSortedConnections() {
 		Collections.sort(connections);
 		return connections;
 	}
 	
-	public static double probSummariesIdentical(Summary firstDocument, Summary secondDocument) {
-		double cossim = cosineSimilarity(firstDocument.getFeatures(), secondDocument.getFeatures());
-		// double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
-		// double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
-		// This applies coefficients learned through logistic regression.
-		// I no longer use title or author, because they caused spurious connections.
-		double exponent = (56.589 * cossim) - 55.559;
-		return 1 / (1 + Math.exp(-exponent));
-		// that's the logit function	
-	}
+//	public static double probSummariesIdentical(Summary firstDocument, Summary secondDocument) {
+//		double cossim = cosineSimilarity(firstDocument.getFeatures(), secondDocument.getFeatures());
+//		// double titlematch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedTitle(), secondDocument.normalizedTitle());
+//		// double authormatch = JaccardSimilarity.jaccardSimilarity(firstDocument.normalizedAuthor(), secondDocument.normalizedAuthor());
+//		// This applies coefficients learned through logistic regression.
+//		// I no longer use title or author, because they caused spurious connections.
+//		double exponent = (56.589 * cossim) - 55.559;
+//		return 1 / (1 + Math.exp(-exponent));
+//		// that's the logit function	
+//	}
 	
-	private static double cosineSimilarity(double[] first, double[] second) {
-		int vectorLength = first.length;
-		assert(first.length == second.length);
-		double dotProduct = 0d;
-		double firstMagnitude = 0d;
-		double secondMagnitude = 0d;
-		for (int i = 0; i < vectorLength; ++i){
-			dotProduct += first[i] * second[i];
-			firstMagnitude += Math.pow(first[i], 2);
-			secondMagnitude += Math.pow(second[i], 2);
-		}
-		firstMagnitude = Math.sqrt(firstMagnitude);
-		secondMagnitude = Math.sqrt(secondMagnitude);
-		double denominator = (firstMagnitude * secondMagnitude);
-		if (denominator < 0.1) {
-			return 0d;
-			// The logic here is twofold. A) We want to avoid division by zero.
-			// More importantly B) We want to ignore very short documents, or
-			// documents lacking English words.
-		}
-		else {
-			return dotProduct / denominator;
-		}
-	}
+//	private static double cosineSimilarity(double[] first, double[] second) {
+//		int vectorLength = first.length;
+//		assert(first.length == second.length);
+//		double dotProduct = 0d;
+//		double firstMagnitude = 0d;
+//		double secondMagnitude = 0d;
+//		for (int i = 0; i < vectorLength; ++i){
+//			dotProduct += first[i] * second[i];
+//			firstMagnitude += first[i] * first[i];
+//			secondMagnitude += second[i] * second[i];
+//		}
+//		firstMagnitude = Math.sqrt(firstMagnitude);
+//		secondMagnitude = Math.sqrt(secondMagnitude);
+//		double denominator = (firstMagnitude * secondMagnitude);
+//		if (denominator < 0.1) {
+//			return 0d;
+//			// The logic here is twofold. A) We want to avoid division by zero.
+//			// More importantly B) We want to ignore very short documents, or
+//			// documents lacking English words.
+//		}
+//		else {
+//			return dotProduct / denominator;
+//		}
+//	}
 	
 //	private double jaccardSimilarity(String first, String second) {
 //		String[] firstset = first.toLowerCase().split("\\s+");

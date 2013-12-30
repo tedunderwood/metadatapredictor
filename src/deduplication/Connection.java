@@ -4,33 +4,46 @@ public class Connection implements Comparable<Connection> {
 	Summary first;
 	Summary second;
 	public double cossim;
-	double titlematch;
-	double authormatch;
+	double distance;
 	double probability;
 	
-	public Connection(Summary first, Summary second, double cossim, double titlematch, double authormatch) {
+	public Connection(Summary first, Summary second, double cossim, double distance) {
 		this.first = first;
 		this.second = second;
 		this.cossim = cossim;
-		this.titlematch = titlematch;
-		this.authormatch = authormatch;
-		probability = calculateProbability();
+		this.distance = distance;
+		probability = calculateProbability(cossim, distance);
 	}
 	
-	private double calculateProbability() {
+	public Connection(Summary first, Summary second) {
+		this.first = first;
+		this.second = second;
+		this.cossim = cosineSimilarity(first.getFeatures(), second.getFeatures());
+	}
+	
+	public double calculateProbability() {
+		this.distance = euclideanDistance(first.rawfeatures, second.rawfeatures);
+		this.probability = calculateProbability(cossim, distance/10000);
+		// Dividing by ten thousand just to get more manageable coefficients. Kludgy, I know.
+		return probability;
+	}
+	
+	private static double calculateProbability(double cos, double dist) {
 		// This applies coefficients learned through logistic regression.
-		double exponent = (56.589 * cossim) - 55.559;
+		// Empirically, cosine similarity is more useful than distance.
+		// Title similarity is a useful empirical clue overall, but I don't use it
+		// because it tends to create problematic superclusters called e.g.
+		// "Waverley novels."
+		double exponent = (103.993 * cos) - (9.021 * dist) - 100.013;
 		return 1 / (1 + Math.exp(-exponent));
 		// that's the logit function
 	}
 	
 	public String outputLine() {
-		String firstSize = Integer.toString(first.numWords);
-		String secondSize = Integer.toString(second.numWords);
-		String distance = Double.toString((first.numWords - second.numWords) / ((first.numWords + second.numWords) / 2d) );
-		String outputLine = first.label + "\t" + firstSize + "\t" + second.label + "\t" + secondSize + "\t" + Double.toString(cossim) +
-				"\t" + distance + "\t" + Double.toString(titlematch) + "\t" + Double.toString(authormatch) + "\t" + first.title + 
-				"\t" + second.title;
+		int firstSize = first.numWords;
+		int secondSize = second.numWords;
+		String outputLine = first.label + "\t" + firstSize + "\t" + second.label + "\t" + secondSize + "\t" + cossim +
+				"\t" + distance + "\t" + probability + "\t" + first.title + "\t" + second.title;
 		return outputLine;
 	}
 	
@@ -40,6 +53,44 @@ public class Connection implements Comparable<Connection> {
 		if (difference < 0) return -1;
 		if (difference == 0) return 0;
 		else return 1;
+	}
+	
+	private static double cosineSimilarity(double[] first, double[] second) {
+		int vectorLength = first.length;
+		assert(first.length == second.length);
+		double dotProduct = 0d;
+		double firstMagnitude = 0d;
+		double secondMagnitude = 0d;
+		for (int i = 0; i < vectorLength; ++i){
+			dotProduct += first[i] * second[i];
+			firstMagnitude += first[i] * first[i];
+			secondMagnitude += second[i] * second[i];
+		}
+		firstMagnitude = Math.sqrt(firstMagnitude);
+		secondMagnitude = Math.sqrt(secondMagnitude);
+		double denominator = (firstMagnitude * secondMagnitude);
+		if (denominator < 0.1) {
+			return 0d;
+			// The logic here is twofold. A) We want to avoid division by zero.
+			// More importantly B) We want to ignore very short documents, or
+			// documents lacking English words.
+		}
+		else {
+			return dotProduct / denominator;
+		}
+	}
+	
+	private static double euclideanDistance(double[] first, double[] second) {
+		int vectorLength = first.length;
+		assert(second.length == vectorLength);
+		
+		double sumOfSquares = 0d;
+		
+		for (int i = 0; i < vectorLength; ++i) {
+			sumOfSquares += Math.pow((first[i] - second[i]), 2);
+		}
+		
+		return Math.sqrt(sumOfSquares);
 	}
 }
 
