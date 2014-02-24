@@ -1,5 +1,9 @@
 package datasets;
 
+import java.util.HashMap;
+
+import classification.LineReader;
+
 /**
  * @author tunderwood
  * @version 1.0
@@ -19,5 +23,75 @@ public abstract class MetadataReader {
 	 */
 	public MetadataReader(String dataSource){
 		this.dataSource = dataSource;
+	}
+	
+	public Metadata readTSV(String[] fields)throws InputFileException {
+		Metadata collection = new Metadata(fields);
+		LineReader textSource = new LineReader(dataSource);
+		try {
+			String[] filelines = textSource.readlines();
+		
+			boolean header = true;
+			int numColumns = 0;
+			int[] columnsToRead = new int[fields.length];
+			
+			for (String line : filelines) {
+				String[] tokens = line.split("\t");
+				if (header) {
+					// This block executes for the first line you read.
+					numColumns = tokens.length;
+					int counter = 0;
+					// We expect to find all the strings specified in 'fields' somewhere
+					// in the first line of the table.
+					for (int i = 0; i < fields.length; ++ i) {
+						String thisfield = fields[i];
+						for (int j = 0; j < numColumns; ++j) {
+							if (tokens[j].equals(thisfield)) {
+								columnsToRead[i] = j;
+								counter += 1;
+							}
+						}
+					}
+					header = false;
+					if (counter < fields.length) {
+						// We did not find all our fields in the columns.
+						InputFileException cause = new InputFileException("TaubMetadataReader cannot find some fields" +
+								" it is assigned in file header.");
+						System.out.println(line);
+						System.out.println(numColumns);
+						System.out.println("counter " + Integer.toString(counter));
+						System.out.println("fields.length " + Integer.toString(fields.length));
+						throw cause;
+					}
+				}
+				else{
+					// This code executes for all lines other than the first.
+					int numFields = tokens.length;
+					if (numFields != numColumns) {
+						InputFileException cause = new InputFileException("Mismatch between number of fields and number of columns at" +
+								" line\n" + line);
+						throw cause;
+					}
+					
+					String htid = tokens[0];
+					// We assume that the volume ID is in the first column of the table.
+					
+					HashMap<String, String> metadataValues = new HashMap<String, String>();
+					for (int i = 0; i < fields.length; ++ i) {
+						metadataValues.put(fields[i], tokens[columnsToRead[i]]);
+						// The names of fields are in fields. columnsToRead indexes
+						// the location of each field in the header line, thus it
+						// can be used as an index for tokens.
+					}
+					Volume volume = new Volume(htid, metadataValues);
+					collection.addVolume(volume);
+				}
+			}
+		}
+		catch (InputFileException cause) {
+			throw cause;
+		}
+		
+		return collection;
 	}
 }

@@ -29,8 +29,9 @@ public class TaubMetadataReader extends MetadataReader {
 	 * fields specified in <code>fields</code>
 	 * @throws NoSuchFieldException
 	 */
-	public Collection readTSV(String[] fields) throws InputFileException {
-		Collection collection = new Collection();
+	@Override
+	public Metadata readTSV(String[] fields) throws InputFileException {
+		Metadata collection = new Metadata(fields);
 		LineReader textSource = new LineReader(dataSource);
 		try {
 			String[] filelines = textSource.readlines();

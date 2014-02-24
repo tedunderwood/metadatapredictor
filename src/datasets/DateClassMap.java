@@ -19,12 +19,12 @@ import classification.WarningLogger;
  * stores the midpoints of date bins. But in addition, every
  * ClassMap has an UNKNOWN class, indicating bad or missing
  * data, or works that for some reason should not be included
- * in training models.
+ * in training models. The method
  * 
  */
 public class DateClassMap extends ClassMap {
 
-	Collection collection;
+	Metadata collection;
 	final String UNKNOWN = "__unknown__";
 	public ArrayList<Integer> classLabels;
 	HashMap<String, ArrayList<Volume>> classMembers;
@@ -39,7 +39,7 @@ public class DateClassMap extends ClassMap {
 	 * saving a <code>binRadius</code> to indicate the number
 	 * of years on either side to include. Note that it's possible
 	 * for a volume to belong to more than one class, since binRadius
-	 * can exceed binSpacing / 2.
+	 * can exceed (binSpacing - 1) / 2.
 	 * 
 	 * @param startBinDate This will be the midpoint of the first bin.
 	 * @param endBinDate This need not be the last midpoint, but in any
@@ -50,7 +50,7 @@ public class DateClassMap extends ClassMap {
 	 * @param fieldToCheck The field in that collection storing date info.
 	 */
 	public DateClassMap(int startBinDate, int endBinDate, int binRadius,
-			int binSpacing, Collection collection, String fieldToCheck) {
+			int binSpacing, Metadata collection, String fieldToCheck) {
 		this.collection = collection;
 		this.fieldToCheck = fieldToCheck;
 		this.binRadius = binRadius;
@@ -115,6 +115,7 @@ public class DateClassMap extends ClassMap {
 		}
 	}
 	
+	@Override
 	public ArrayList<String> getValidClasses() {
 		ArrayList<String> validClasses = new ArrayList<String>();
 		for (int midpoint : classLabels) {
@@ -129,6 +130,10 @@ public class DateClassMap extends ClassMap {
 			WarningLogger.logWarning("Class " + aClass + " was not found.");
 		}
 		return members;
+	}
+	
+	public int getClassSize(String aClass) {
+		return classMembers.get(aClass).size();
 	}
 	
 	public ArrayList<Volume> getSelectedNonmembers(String excludedClass, int n) {

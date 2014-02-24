@@ -7,7 +7,7 @@ import java.util.ArrayList;
  * document category. Permits degrees of class membership,
  * which makes it a little unorthodox.
  * 
- * This class is threadsafe because each instance is owned
+ * This class is threadsafe if each instance is owned
  * by one and only one EMfork(thread). It can see only the
  * DocCategory owned by that thread. All threads use the
  * same Corpus, but that is immutable.

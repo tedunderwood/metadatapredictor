@@ -1,5 +1,5 @@
 package datasets;
-import java.util.List;
+import java.util.ArrayList;
 
 
 
@@ -13,7 +13,7 @@ import java.util.List;
  *
  */
 public abstract class ClassMap {
-	Collection collection;
+	Metadata collection;
 	final String UNKNOWN = "__unknown__";
 	
 	
@@ -23,7 +23,7 @@ public abstract class ClassMap {
 	 * @param aClass
 	 * @return An ArrayList of Volumes matching aClass.
 	 */
-	public abstract List<Volume> getMembers(String aClass);
+	public abstract ArrayList<Volume> getMembers(String aClass);
 	
 	/**
 	 * All instantiations of ClassMap should have a method that
@@ -32,7 +32,7 @@ public abstract class ClassMap {
 	 * @return An ArrayList containing the names of all valid
 	 * classes in this map.
 	 */
-	public abstract List<String> getValidClasses();
+	public abstract ArrayList<String> getValidClasses();
 	
 	/**
 	 * This method is used to find negative instances for a training corpus.
@@ -40,5 +40,7 @@ public abstract class ClassMap {
 	 * @param n
 	 * @return A random selection of n volumes not in aClass.
 	 */
-	public abstract List<Volume> getSelectedNonmembers(String aClass, int n);
+	public abstract ArrayList<Volume> getSelectedNonmembers(String aClass, int n);
+	
+	public abstract void mapVolsByMetadata();
 }

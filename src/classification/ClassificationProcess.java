@@ -1,7 +1,7 @@
 package classification;
 
-import datasets.ClassMap;
-import datasets.Collection;
+//import datasets.ClassMap;
+//import datasets.Collection;
 
 /**
  * @author tunderwood
@@ -19,10 +19,10 @@ public abstract class ClassificationProcess {
 	 * @param classMap Contains a list of classLabels permitted
 	 * in this classification task.
 	 */
-	private String metadataPath;
-	private String dataPath;
-	private Collection collection;
-	private ClassMap classMap;
+//	private String metadataPath;
+//	private String dataPath;
+//	private Collection collection;
+//	private ClassMap classMap;
 	
 
 }
