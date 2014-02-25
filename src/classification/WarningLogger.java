@@ -1,5 +1,7 @@
 package classification;
 
+import java.util.HashSet;
+
 /**
  * @author tunder
  * @version 1.0
@@ -9,6 +11,7 @@ package classification;
 public final class WarningLogger {
 	static LineWriter theWriter;
 	static boolean writeToFile = false;
+	static HashSet<String> notFound = new HashSet<String>();
 	
 	public static void initializeLogger(boolean toFile, String filename) {
 		writeToFile = toFile;
@@ -24,6 +27,10 @@ public final class WarningLogger {
 		else {
 			System.out.println(theWarning);
 		}
+	}
+	
+	public static void addFileNotFound(String file) {
+		notFound.add(file);
 	}
 
 }

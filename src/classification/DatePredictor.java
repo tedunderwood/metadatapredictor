@@ -1,6 +1,7 @@
 package classification;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
@@ -10,6 +11,7 @@ import datasets.*;
 public class DatePredictor {
 	
 	static Metadata metadata;
+	static DateClassMap classMap;
 
 	/**
 	 * @author tunderwood
@@ -22,9 +24,10 @@ public class DatePredictor {
 		
 		String metadataFile = args[0];
 		String dataSource = args[1];
-		String[] fieldList = {"date"};
+		String[] fieldList = {"date", "totalpages", "totalwords"};
 		int binRadius = Integer.parseInt(args[2]);
-		int maxVolsToRead = Integer.parseInt(args[3]);
+		int vocabularySize = Integer.parseInt(args[3]);
+		int maxVolsToRead = Integer.parseInt(args[4]);
 		
 		MetadataReader metadataReader = new TaubMetadataReader(metadataFile);
 		
@@ -55,7 +58,7 @@ public class DatePredictor {
 		// firstBinMidpoint 1702 and
 		// binSpacing 5
 		
-		DateClassMap classMap = new DateClassMap(firstBinMidpoint, endDate, binRadius,
+		classMap = new DateClassMap(firstBinMidpoint, endDate, binRadius,
 			binSpacing, metadata, "date");
 		classMap.mapVolsByMetadata();
 		
@@ -67,17 +70,9 @@ public class DatePredictor {
 			if (thisSize < minClassSize) minClassSize = thisSize;
 		}
 		
-		SparseTableReader dataReader = new SparseTableReader(dataSource);
+		PairtreeReader dataReader = new PairtreeReader(dataSource);
+		HashSet<String> vocabulary = buildVocabulary(classLabels, vocabularySize, dataReader);
 		
-		// Let's build a vocabulary
-		int volumesPerClass = 100;
-		for (String label : classLabels) {
-			int volumesToGet;
-			int thisSize = classMap.getClassSize(label);
-			if (thisSize < volumesPerClass) volumesToGet = thisSize;
-			else volumesToGet = volumesPerClass;
-			
-		}
 		
 		// Now we're going to build a model for each class in the classMap, and save it.
 		// 
@@ -96,6 +91,56 @@ public class DatePredictor {
 	
 	private static String stacktraceToString(InputFileException e) {
 	    return Arrays.toString(e.getStackTrace());
+	}
+	
+	private static HashSet<String> buildVocabulary(ArrayList<String> classLabels, int vocabularySize, PairtreeReader dataReader) {
+		// Let's build a vocabulary
+		HashSet<String> featuresToLoad = new HashSet<String>();
+		// We leave this empty, which ensures loading all features.
+		HashMap<String, Integer> wordcounts = new HashMap<String, Integer>();
+		
+		int volumesPerClass = 100;
+		for (String label : classLabels) {
+			int volumesToGet;
+			int thisSize = classMap.getClassSize(label);
+			if (thisSize < volumesPerClass) volumesToGet = thisSize;
+			else volumesToGet = volumesPerClass;
+			ArrayList<Volume> selectedVols = classMap.getSelectedMembers(label, volumesToGet);
+			ArrayList<Document> selectedDocs = dataReader.getMultipleDocs(selectedVols, featuresToLoad);
+			for (Document doc : selectedDocs) {
+				HashMap<String, Double> features = doc.getFeatures();
+				for (String key : features.keySet()) {
+					int newCount = features.get(key).intValue();
+					int existingCount = wordcounts.get(key);
+					if (existingCount == 0) wordcounts.put(key, newCount);
+					else wordcounts.put(key, existingCount + newCount);
+					// really that's a sort of moot if-else since 0 + newCount = newCount
+				}
+			}
+		}
+			
+		// now we have a HashMap that maps each word to its count
+		ValueComparator inValueOrder = new ValueComparator(wordcounts);
+		int mapSize = wordcounts.size();
+		String[] allTheKeys = new String[mapSize];
+		int idx = 0;
+		for (String aWord : wordcounts.keySet()) {
+			allTheKeys[idx] = aWord;
+			idx += 1;
+		}
+		System.out.println("Sorting vocabulary.");
+		Arrays.sort(allTheKeys, inValueOrder);
+		
+		HashSet<String> vocabulary = new HashSet<String>();
+		
+		for (int i = 0; i < vocabularySize; ++i) {
+			vocabulary.add(allTheKeys[i]);
+		}
+		
+		wordcounts = null;
+		allTheKeys = null;
+		System.gc();
+		return vocabulary;
 	}
 
 }

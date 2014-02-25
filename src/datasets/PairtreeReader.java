@@ -3,6 +3,7 @@ package datasets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.ArrayList;
 import java.io.File;
 
 import classification.Document;
@@ -15,6 +16,7 @@ public class PairtreeReader {
 	String dataPath;
 	static final int NUMCOLUMNS = 3;
 	Pairtree pairtree;
+	WarningLogger logger;
 	
 	public PairtreeReader(String dataPath) {
 		this.dataPath = dataPath;
@@ -35,7 +37,7 @@ public class PairtreeReader {
 		return wholePath;
 	}
 	
-	public Document getDocument(Volume vol, HashSet<String> featuresToLoad) throws InputFileException {
+	public Document getDocument(Volume vol, HashSet<String> featuresToLoad) {
 		String path = getPairtreePath(vol);
 		LineReader reader = new LineReader(path);
 		
@@ -54,14 +56,20 @@ public class PairtreeReader {
 			
 		}
 		catch (InputFileException e) {
-			WarningLogger.logWarning("Could not find " + path);
-			throw e;
+			WarningLogger.addFileNotFound(path);
 		}
 		Document newInstance = new Document(wordcounts, vol);
 		return newInstance;
 	}
 	
-	
+	public ArrayList<Document> getMultipleDocs(ArrayList<Volume> vols, HashSet<String> featuresToLoad) {
+		ArrayList<Document> docList = new ArrayList<Document>();
+		for (Volume vol : vols) {
+			Document thisDoc = getDocument(vol, featuresToLoad);
+			docList.add(thisDoc);
+		}
+		return docList;
+	}
 	
 	/**
 	 * Reads sparse tables formatted as a tsv where filename is the first column,

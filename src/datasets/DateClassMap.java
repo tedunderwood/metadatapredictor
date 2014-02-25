@@ -3,6 +3,7 @@ package datasets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
+import java.util.Collections;
 
 import classification.WarningLogger;
 
@@ -134,6 +135,25 @@ public class DateClassMap extends ClassMap {
 	
 	public int getClassSize(String aClass) {
 		return classMembers.get(aClass).size();
+	}
+	
+	public ArrayList<Volume> getSelectedMembers(String aClass, int n) {
+		int classSize = getClassSize(aClass);
+		ArrayList<Volume> members = new ArrayList<Volume>(classMembers.get(aClass));
+		// make a shallow copy to avoid shuffling the underlying list in classMembers
+
+		if (n <= classSize) return members;
+		else {
+			Collections.shuffle(members);
+			// We're going to sample without replacement. Easiest way to do that
+			// is just to shuffle the list.
+			ArrayList<Volume> selectedMembers = new ArrayList<Volume>();
+			for (int i = 0; i < n; ++i) {
+				selectedMembers.add(members.get(i));
+			}
+			return selectedMembers;
+		}
+		
 	}
 	
 	public ArrayList<Volume> getSelectedNonmembers(String excludedClass, int n) {

@@ -35,5 +35,9 @@ public class Document {
 	public double getNormalizedTermFreq(String term) {
 		return (features.get(term) / numPages);
 	}
+	
+	public HashMap<String, Double> getFeatures(){
+		return features;
+	}
 
 }
