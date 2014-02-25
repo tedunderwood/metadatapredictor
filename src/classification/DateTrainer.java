@@ -27,7 +27,7 @@ public class DateTrainer extends Trainer {
 	
 	public ArrayList<SupervisedLearner> trainAllClasses() {
 		ensemble = new ArrayList<SupervisedLearner>();
-		ArrayList<String> classes = classMap.getValidClasses();
+		ArrayList<String> classes = classMap.getKnownClasses();
 		
 		for (String thisClass : classes) {
 			ArrayList<Volume> positives = classMap.getMembers(thisClass);

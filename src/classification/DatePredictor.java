@@ -28,6 +28,7 @@ public class DatePredictor {
 		int binRadius = Integer.parseInt(args[2]);
 		int vocabularySize = Integer.parseInt(args[3]);
 		int maxVolsToRead = Integer.parseInt(args[4]);
+		String ridgeParameter = args[5];
 		
 		MetadataReader metadataReader = new TaubMetadataReader(metadataFile);
 		
@@ -62,7 +63,8 @@ public class DatePredictor {
 			binSpacing, metadata, "date");
 		classMap.mapVolsByMetadata();
 		
-		ArrayList<String> classLabels = classMap.getValidClasses();
+		ArrayList<String> classLabels = classMap.getKnownClasses();
+		int classCount = classLabels.size();
 		
 		int minClassSize = 10000000;
 		for (String label : classLabels) {
@@ -71,29 +73,44 @@ public class DatePredictor {
 		}
 		
 		PairtreeReader dataReader = new PairtreeReader(dataSource);
-		HashSet<String> vocabulary = buildVocabulary(classLabels, vocabularySize, dataReader);
-		
+		ArrayList<String> orderedVocabulary = buildVocabulary(classLabels, vocabularySize, dataReader);
+		HashSet<String> vocabulary = new HashSet<String>(orderedVocabulary);
 		
 		// Now we're going to build a model for each class in the classMap, and save it.
-		// 
-		Map<String, HashMap<String, Integer>> wordcounts = new HashMap<String, HashMap<String, Integer>>();
-		try {
-			 wordcounts = dataReader.readTSVasMap();
+		int maxSetSize = maxVolsToRead / 2;
+		int setSize;
+		ArrayList<LogisticClassifier> models = new ArrayList<LogisticClassifier>(classCount);
+		
+		for (String label : classLabels) {
+			int thisSize = classMap.getClassSize(label);
+			if (thisSize > maxSetSize) setSize = maxSetSize;
+			else setSize = thisSize;
+			ArrayList<Volume> positiveVols = classMap.takeRandomSample(label, setSize);
+			ArrayList<Volume> negativeVols = classMap.stratifiedSampleExcept(label, setSize);
+			ArrayList<Document> positiveDocs = dataReader.getMultipleDocs(positiveVols, vocabulary);
+			ArrayList<Document> negativeDocs = dataReader.getMultipleDocs(negativeVols, vocabulary);
+			ArrayList<Document> allDocs = new ArrayList<Document>(positiveDocs);
+			allDocs.addAll(negativeDocs);
+			ArrayList<Double> classValues = new ArrayList<Double>();
+			int sizeOfWholeSet = allDocs.size();
+			int numPositives = positiveDocs.size();
+			for (int i = 0; i < sizeOfWholeSet; ++ i) {
+				if (i < numPositives) classValues.add(1d);
+				else classValues.add(0d);
+			}
+			// We now have a list of positive and negative examples, and a list of
+			// classValues indexed to it, containing 1 for positive examples and 0d for
+			// negative ones.
+			LogisticClassifier thisClassifier = new LogisticClassifier(label, orderedVocabulary, allDocs, classValues, ridgeParameter);
+			models.add(thisClassifier);
 		}
-		catch (InputFileException e) {
-			String stacktrace = stacktraceToString(e);
-			System.out.println("Exception in dataReader\n" + stacktrace);
-			System.exit(0);
-		}
-		System.out.println("Done loading data.");
-		System.out.println("Loaded " + Integer.toString(wordcounts.size()) + " volume IDs as data.");
 	}
 	
 	private static String stacktraceToString(InputFileException e) {
 	    return Arrays.toString(e.getStackTrace());
 	}
 	
-	private static HashSet<String> buildVocabulary(ArrayList<String> classLabels, int vocabularySize, PairtreeReader dataReader) {
+	private static ArrayList<String> buildVocabulary(ArrayList<String> classLabels, int vocabularySize, PairtreeReader dataReader) {
 		// Let's build a vocabulary
 		HashSet<String> featuresToLoad = new HashSet<String>();
 		// We leave this empty, which ensures loading all features.
@@ -105,7 +122,7 @@ public class DatePredictor {
 			int thisSize = classMap.getClassSize(label);
 			if (thisSize < volumesPerClass) volumesToGet = thisSize;
 			else volumesToGet = volumesPerClass;
-			ArrayList<Volume> selectedVols = classMap.getSelectedMembers(label, volumesToGet);
+			ArrayList<Volume> selectedVols = classMap.takeRandomSample(label, volumesToGet);
 			ArrayList<Document> selectedDocs = dataReader.getMultipleDocs(selectedVols, featuresToLoad);
 			for (Document doc : selectedDocs) {
 				HashMap<String, Double> features = doc.getFeatures();
@@ -131,16 +148,16 @@ public class DatePredictor {
 		System.out.println("Sorting vocabulary.");
 		Arrays.sort(allTheKeys, inValueOrder);
 		
-		HashSet<String> vocabulary = new HashSet<String>();
+		ArrayList<String> orderedVocabulary = new ArrayList<String>();
 		
 		for (int i = 0; i < vocabularySize; ++i) {
-			vocabulary.add(allTheKeys[i]);
+			orderedVocabulary.add(allTheKeys[i]);
 		}
 		
 		wordcounts = null;
 		allTheKeys = null;
 		System.gc();
-		return vocabulary;
+		return orderedVocabulary;
 	}
 
 }

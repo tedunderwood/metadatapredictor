@@ -32,7 +32,7 @@ public abstract class ClassMap {
 	 * @return An ArrayList containing the names of all valid
 	 * classes in this map.
 	 */
-	public abstract ArrayList<String> getValidClasses();
+	public abstract ArrayList<String> getKnownClasses();
 	
 	/**
 	 * This method is used to find negative instances for a training corpus.

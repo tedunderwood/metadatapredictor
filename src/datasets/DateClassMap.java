@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 import java.util.Collections;
+import java.lang.Math;
 
 import classification.WarningLogger;
 
@@ -33,6 +34,8 @@ public class DateClassMap extends ClassMap {
 	int numBins;
 	int binRadius;
 	private Random randomGenerator;
+	ArrayList<Integer> classSizes;
+	int totalVolumes;
 
 	/**
 	 * Constructor that generates "bins" of dates, allowed to
@@ -80,6 +83,8 @@ public class DateClassMap extends ClassMap {
 			ArrayList<Volume> emptyList = new ArrayList<Volume>();
 			classMembers.put(label, emptyList);
 		}
+		ArrayList<Volume> emptyList = new ArrayList<Volume>();
+		classMembers.put(UNKNOWN, emptyList);
 		
 		ArrayList<Volume> volumes = collection.getVolumes();
 		
@@ -114,15 +119,30 @@ public class DateClassMap extends ClassMap {
 				}
 			}
 		}
+		// Now we create a vector of class sizes reliably mapped to the label
+		// sequence returned by getAllClasses.
+		ArrayList<String> allLabels = getAllClasses();
+		classSizes = new ArrayList<Integer>();
+		totalVolumes = 0;
+		for (String label: allLabels) {
+			classSizes.add(getClassSize(label));
+			totalVolumes += getClassSize(label);
+		}
 	}
 	
 	@Override
-	public ArrayList<String> getValidClasses() {
+	public ArrayList<String> getKnownClasses() {
 		ArrayList<String> validClasses = new ArrayList<String>();
 		for (int midpoint : classLabels) {
 			validClasses.add(Integer.toString(midpoint));
 		}
 		return validClasses;
+	}
+	
+	public ArrayList<String> getAllClasses() {
+		ArrayList<String> classes = getKnownClasses();
+		classes.add(UNKNOWN);
+		return classes;
 	}
 	
 	public ArrayList<Volume> getMembers(String aClass) {
@@ -137,7 +157,7 @@ public class DateClassMap extends ClassMap {
 		return classMembers.get(aClass).size();
 	}
 	
-	public ArrayList<Volume> getSelectedMembers(String aClass, int n) {
+	public ArrayList<Volume> takeRandomSample(String aClass, int n) {
 		int classSize = getClassSize(aClass);
 		ArrayList<Volume> members = new ArrayList<Volume>(classMembers.get(aClass));
 		// make a shallow copy to avoid shuffling the underlying list in classMembers
@@ -146,7 +166,7 @@ public class DateClassMap extends ClassMap {
 		else {
 			Collections.shuffle(members);
 			// We're going to sample without replacement. Easiest way to do that
-			// is just to shuffle the list.
+			// is just to shuffle the list and take the first n items.
 			ArrayList<Volume> selectedMembers = new ArrayList<Volume>();
 			for (int i = 0; i < n; ++i) {
 				selectedMembers.add(members.get(i));
@@ -156,6 +176,29 @@ public class DateClassMap extends ClassMap {
 		
 	}
 	
+	/**
+	 * Returns a sample of n volumes distributed proportionally across
+	 * all classes in the dataset except the one specified.
+	 * @param aClass The class not to include in this sample.
+	 * @param n The total number of volumes to return.
+	 * @return a sample of n volumes distributed proportionally across
+	 * all classes in the dataset except aClass.
+	 */
+	public ArrayList<Volume> stratifiedSampleExcept(String aClass, int n) {
+		int excludedVolumes = getClassSize(aClass);
+		int sizeOfClassesSampled = totalVolumes - excludedVolumes;
+		ArrayList<Volume> sample = new ArrayList<Volume>();
+		ArrayList<String> allClasses = getAllClasses();
+		for (String classLabel : allClasses) {
+			int takeFromThisClass = (int) Math.round( n * (getClassSize(classLabel) / (double) sizeOfClassesSampled));
+			// We're getting a stratified sample, so each class should contribute a number of volumes
+			// proportional to its fraction of the total field being sampled.
+			sample.addAll(takeRandomSample(classLabel, takeFromThisClass));
+		}
+		return sample;
+	}
+	
+	// following method deprecated -- I believe it uses replacement
 	public ArrayList<Volume> getSelectedNonmembers(String excludedClass, int n) {
 		ArrayList<Volume> nonmembers = new ArrayList<Volume>();
 		for (int midpoint : classLabels) {
