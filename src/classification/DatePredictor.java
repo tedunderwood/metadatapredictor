@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Map;
+import java.io.*;
 
 import datasets.*;
 
@@ -12,6 +12,9 @@ public class DatePredictor {
 	
 	static Metadata metadata;
 	static DateClassMap classMap;
+	static int startDate;
+	static int endDate;
+	static int binRadius;
 
 	/**
 	 * @author tunderwood
@@ -25,10 +28,11 @@ public class DatePredictor {
 		String metadataFile = args[0];
 		String dataSource = args[1];
 		String[] fieldList = {"date", "totalpages", "totalwords"};
-		int binRadius = Integer.parseInt(args[2]);
+		binRadius = Integer.parseInt(args[2]);
 		int vocabularySize = Integer.parseInt(args[3]);
 		int maxVolsToRead = Integer.parseInt(args[4]);
 		String ridgeParameter = args[5];
+		String outputPath = args[6];
 		
 		MetadataReader metadataReader = new TaubMetadataReader(metadataFile);
 		
@@ -43,9 +47,8 @@ public class DatePredictor {
 		}
 		System.out.println("Done reading metadata.");
 		
-		int numVolumes = metadata.getSize();
-		int startDate = metadata.getMinDate(true);
-		int endDate = metadata.getMaxDate(true);
+		startDate = metadata.getMinDate(true);
+		endDate = metadata.getMaxDate(true);
 		// both boolean flags are true because we tolerate errors in date parsing
 		if (endDate < 0 | startDate < 0) {
 			System.out.println("Error condition:");
@@ -103,7 +106,98 @@ public class DatePredictor {
 			// negative ones.
 			LogisticClassifier thisClassifier = new LogisticClassifier(label, orderedVocabulary, allDocs, classValues, ridgeParameter);
 			models.add(thisClassifier);
+			// We have added the classifier to a collection of models. Now we serialize it and
+			// write it to file so we can reconstruct this process if needed.
+			try {
+				FileOutputStream fileout = new FileOutputStream(outputPath + label + ".classifier");
+				ObjectOutputStream serializer = new ObjectOutputStream(fileout);
+				serializer.writeObject(thisClassifier);
+				serializer.close();
+				fileout.close();
+			}
+			catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
+		// Now we actually classify the volumes using our model.
+		ArrayList<Volume> volumes = metadata.getVolumes();
+		int numVolumes = metadata.getSize();
+		int numChunks = (int) Math.ceil(numVolumes / (double) maxVolsToRead);
+		ArrayList<ArrayList<Double>> predictAllVols = new ArrayList<ArrayList<Double>>();
+		for (int i = 0; i < numChunks; ++i) {
+			int floor = i * maxVolsToRead;
+			int ceiling = (i + 1) * maxVolsToRead;
+			if (ceiling > numVolumes) ceiling = numVolumes;
+			for (int j = floor; j < ceiling; ++j) {
+				Volume vol = volumes.get(j);
+				Document doc = dataReader.getDocument(vol, vocabulary);
+				ArrayList<Double> predictionVector = new ArrayList<Double>();
+				for (LogisticClassifier model : models) {
+					predictionVector.add(model.predictDocument(doc));
+				}
+				predictAllVols.add(predictionVector);
+			}
+		}
+		
+		ArrayList<Integer> predictedDates = new ArrayList<Integer>();
+		// Now we need to infer estimated dates from the maximum prediction. But since
+		// predictions may be noisy, we want to do this with some smoothing.
+		for (int i = 0; i < numVolumes; ++i) {
+			int newDate = predictDate(predictAllVols.get(i), classLabels, 12);
+			predictedDates.add(newDate);
+		}
+		
+		ArrayWriter volumePredictions = new ArrayWriter("\t");
+		ArrayList<String> htids = new ArrayList<String>();
+		for (Volume vol : volumes) {
+			htids.add(vol.htid);
+		}
+		volumePredictions.addStringColumn(htids, "volume");
+		volumePredictions.addIntegerColumn(predictedDates, "date");
+		volumePredictions.addDoubleArray(predictAllVols, classLabels);
+		volumePredictions.writeToFile(outputPath + "volumePredictions.tsv");
+	}
+	
+	private static int predictDate(ArrayList<Double> predictionVector, ArrayList<String> classLabels, int span) {
+		int predictedDate = 0;
+		double maxPrediction = 0;
+		
+		// This is basically a smoothing problem. We have predictions located at bin midpoints, and we want to
+		// infer smoothed predictions for specific years.
+		
+		for (int date = startDate; date <= endDate; ++date) {
+			ArrayList<Double> relevanceVector = new ArrayList<Double>();
+			for (String label : classLabels) {
+				int year = Integer.parseInt(label);
+				double relevance;
+				if ((year + span) < date | (year - span) > date) relevance = 0d;
+				else relevance = (double) (span) - Math.abs(year - date);
+				// If you imagine a line from the edge of the span to the date,
+				// bisected by the year of this class, this is the far section of
+				// the line. So, it's bigger the closer year is to date.
+				relevanceVector.add(relevance);
+			}
+			
+			// we normalize the relevanceVector to unit length
+			double vectorSum = 0;
+			for (Double value : relevanceVector) {
+				vectorSum += value;
+			}
+			for (int i = 0; i < relevanceVector.size(); ++ i) {
+				relevanceVector.set(i, relevanceVector.get(i) / vectorSum);
+			}
+			
+			double thisPrediction = 0;
+			for (int i = 0; i < predictionVector.size(); ++i) {
+				thisPrediction += predictionVector.get(i) * relevanceVector.get(i);
+			}
+			if (thisPrediction > maxPrediction) {
+				maxPrediction = thisPrediction;
+				predictedDate = date;
+			}
+		}
+		
+		return predictedDate;
 	}
 	
 	private static String stacktraceToString(InputFileException e) {

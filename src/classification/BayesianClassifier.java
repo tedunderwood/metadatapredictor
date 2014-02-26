@@ -116,7 +116,7 @@ public class BayesianClassifier extends SupervisedLearner {
 		dummy.add("__feature__");
 		
 		logisticCalibration = new LogisticClassifier("__label__", corpus.getMembershipProbs(), 
-				dummy, predictionsOnTrainingSet, "0");
+				dummy, predictionsOnTrainingSet, 0d);
 	}
 	
 	public double predictDocument(Document instance) {

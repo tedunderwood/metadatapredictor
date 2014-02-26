@@ -10,7 +10,7 @@ import weka.core.Instances;
 import weka.core.Instance;
 
 
-public class LogisticClassifier extends SupervisedLearner {
+public class LogisticClassifier implements java.io.Serializable {
 	
 	Classifier logistic;
 	Instances trainingSet;
@@ -21,6 +21,7 @@ public class LogisticClassifier extends SupervisedLearner {
 	String ridgeParameter;
 	String classLabel;
 	double[][] memberProbs;
+	static final long serialVersionUID = 927333927L;
 	
 	/**
 	 * Create a logistic classifier using classes from the Weka toolkit.
@@ -112,7 +113,7 @@ public class LogisticClassifier extends SupervisedLearner {
 	private ArrayList<Double> unpackDocument(Document doc, ArrayList<String> features) {
 		ArrayList<Double> unpacked = new ArrayList<Double>(features.size());
 		for (String feature: features) {
-			Double thisFrequency = (double) doc.getRawTermFreq(feature);
+			Double thisFrequency = doc.getNormalizedTermFreq(feature);
 			if (thisFrequency == null) thisFrequency = 0d;
 			unpacked.add(thisFrequency);
 		}
@@ -175,6 +176,100 @@ public class LogisticClassifier extends SupervisedLearner {
 		return prediction[0];
 	}
 	
+	public LogisticClassifier(String genreToIdentify, ArrayList<Double> classLabels, ArrayList<String> features, ArrayList<ArrayList<Double>> docFeatureValues, Double ridge) {
+		
+		boolean verbose = Global.verbose;
+		// It's a bit of a hack, but we store a flag indicating how verbosely to log events in the
+		// static final class Global.
+		
+		numFeatures = features.size();
+		numInstances = classLabels.size();
+		this.ridgeParameter = Double.toString(ridge);
+		this.classLabel = genreToIdentify;
+		this.features = features;
+		memberProbs = new double[numInstances][2];
+		
+		FastVector featureNames = new FastVector(numFeatures + 1);
+		for (int i = 0; i < numFeatures; ++ i) {
+			Attribute a = new Attribute(features.get(i));
+			featureNames.addElement(a);
+		}
+		
+		// Now we add the class attribute.
+		FastVector classValues = new FastVector(2);
+		classValues.addElement("positive");
+		classValues.addElement("negative");
+		Attribute classAttribute = new Attribute("class", classValues);
+		featureNames.addElement(classAttribute);
+		
+		trainingSet = new Instances(genreToIdentify, featureNames, numInstances);
+		trainingSet.setClassIndex(numFeatures);
+		ArrayList<Instance> simpleListOfInstances = new ArrayList<Instance>(numInstances);
+		
+		int poscount = 0;
+		for (int h = 0; h < numInstances; ++ h) {
+			ArrayList<Double> aDoc = docFeatureValues.get(h);
+			Instance instance = new Instance(numFeatures + 1);
+			for (int i = 0; i < numFeatures; ++i) {
+				instance.setValue((Attribute)featureNames.elementAt(i), aDoc.get(i));
+			}
+			if (classLabels.get(h) > 0.5) {
+				// this is a positive instance
+				instance.setValue((Attribute)featureNames.elementAt(numFeatures), "positive");
+				poscount += 1;
+			}
+			else {
+				instance.setValue((Attribute)featureNames.elementAt(numFeatures), "negative");
+			}
+			trainingSet.add(instance);
+			simpleListOfInstances.add(instance);
+		}
+		
+		if (verbose) {
+			WarningLogger.logWarning(genreToIdentify + " count: " + poscount + "\n");
+		}
+		
+		try {
+			String[] options = {"-R", ridgeParameter};
+			logistic = Classifier.forName("weka.classifiers.functions.Logistic", options);
+			logistic.buildClassifier(trainingSet);
+			if (verbose) {
+				WarningLogger.logWarning(logistic.toString());
+			}
+			 
+//			Evaluation eTest = new Evaluation(trainingSet);
+//			eTest.evaluateModel(logistic, trainingSet);
+//			 
+//			String strSummary = eTest.toSummaryString();
+//			if (verbose) {
+//				WarningLogger.logWarning(strSummary);
+//			}
+//			
+//			for (int i = 0; i < numInstances; ++i) {
+//				Instance anInstance = simpleListOfInstances.get(i);
+//				memberProbs[i] = logistic.distributionForInstance(anInstance);
+//			}
+//			// Get the confusion matrix
+//			double[][] cmMatrix = eTest.confusionMatrix();
+//			if (verbose) {
+//				WarningLogger.logWarning("      Really " + genreToIdentify + "     other.");
+//				WarningLogger.logWarning("===================================");
+//				String[] lineheads = {"ID'd " + genreToIdentify+ ":  ", "ID'd other "};
+//				for (int i = 0; i < 2; ++i) {
+//					double[] row = cmMatrix[i];
+//					WarningLogger.logWarning(lineheads[i] + Integer.toString((int) row[0]) + "             " + Integer.toString((int) row[1]));
+//				}
+//			}
+		}
+		catch (Exception e){
+			e.printStackTrace();
+			System.out.println(e);
+		}
+		if (verbose) {
+			WarningLogger.logWarning("\n\n");
+		}
+		
+	}
 
 }
 
