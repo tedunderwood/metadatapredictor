@@ -113,7 +113,7 @@ public class LogisticClassifier implements java.io.Serializable {
 	private ArrayList<Double> unpackDocument(Document doc, ArrayList<String> features) {
 		ArrayList<Double> unpacked = new ArrayList<Double>(features.size());
 		for (String feature: features) {
-			Double thisFrequency = doc.getNormalizedTermFreq(feature);
+			Double thisFrequency = doc.termNormalizedByWordcount(feature);
 			if (thisFrequency == null) thisFrequency = 0d;
 			unpacked.add(thisFrequency);
 		}
@@ -138,7 +138,7 @@ public class LogisticClassifier implements java.io.Serializable {
 	public double predictDocument(Document instance) {
 		ArrayList<Double> vector = new ArrayList<Double>();
 		for (String term : features) {
-			vector.add(instance.getNormalizedTermFreq(term));
+			vector.add(instance.termNormalizedByWordcount(term));
 		}
 		double[] prediction = predictVector(vector);
 		return prediction[0];

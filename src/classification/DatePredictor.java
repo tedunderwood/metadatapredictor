@@ -27,7 +27,7 @@ public class DatePredictor {
 		
 		String metadataFile = args[0];
 		String dataFolder = args[1];
-		String[] fieldList = {"date", "totalpages", "totalwords"};
+		String[] fieldList = {"date"};
 		binRadius = Integer.parseInt(args[2]);
 		int vocabularySize = Integer.parseInt(args[3]);
 		int maxVolsToRead = Integer.parseInt(args[4]);

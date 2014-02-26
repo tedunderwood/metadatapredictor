@@ -33,8 +33,12 @@ public class Volume {
 	public String htid;
 	HashMap<String, String> metadataValues;
 	HashMap<String, Prediction> metadataPredictions;
-	int numPages;
-	int numWords;
+	int numPages = 1;
+	int numWords = 1;
+	// Flagging the slightly kludgy workaround I've used here to avoid nulls
+	// and division by zero. Default assumption is that all volumes have
+	// at least one page and one word. This can be overwritten by better
+	// info once we get it.
 	
 	/**
 	 * @param htid A string holding the HathiTrust volume ID.
