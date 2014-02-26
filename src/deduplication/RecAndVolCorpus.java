@@ -12,7 +12,7 @@ import classification.WarningLogger;
 
 import datasets.InputFileException;
 import datasets.Volume;
-import datasets.Collection;
+import datasets.Metadata;
 
 /**
  * A data structure that collects volumes as well as the records
@@ -59,7 +59,7 @@ public class RecAndVolCorpus {
 	 * @param features The array of features we're using for the deduplication process. 
 	 * @param wordcounts The map of maps storing wordcounts.
 	 */
-	public RecAndVolCorpus(Collection collection, String[] features, Map<String, HashMap<String, Integer>> wordcounts) {
+	public RecAndVolCorpus(Metadata collection, String[] features, Map<String, HashMap<String, Integer>> wordcounts) {
 		// The error-logging system implemented here allows for the possibility that we may not
 		// have wordcount data for all the volumes in the collection. Mismatches get sent to
 		// a log file, as long as they are below the ALLOWEDERRORS constant set above. (We don't

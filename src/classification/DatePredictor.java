@@ -26,13 +26,15 @@ public class DatePredictor {
 		// TODO Auto-generated method stub
 		
 		String metadataFile = args[0];
-		String dataSource = args[1];
+		String dataFolder = args[1];
 		String[] fieldList = {"date", "totalpages", "totalwords"};
 		binRadius = Integer.parseInt(args[2]);
 		int vocabularySize = Integer.parseInt(args[3]);
 		int maxVolsToRead = Integer.parseInt(args[4]);
 		String ridgeParameter = args[5];
-		String outputPath = args[6];
+		String outputFolder = args[6];
+		
+		WarningLogger.initializeLogger(true, outputFolder + "errorlog.txt");
 		
 		MetadataReader metadataReader = new TaubMetadataReader(metadataFile);
 		
@@ -75,7 +77,7 @@ public class DatePredictor {
 			if (thisSize < minClassSize) minClassSize = thisSize;
 		}
 		
-		PairtreeReader dataReader = new PairtreeReader(dataSource);
+		PairtreeReader dataReader = new PairtreeReader(dataFolder);
 		ArrayList<String> orderedVocabulary = buildVocabulary(classLabels, vocabularySize, dataReader);
 		HashSet<String> vocabulary = new HashSet<String>(orderedVocabulary);
 		
@@ -109,7 +111,7 @@ public class DatePredictor {
 			// We have added the classifier to a collection of models. Now we serialize it and
 			// write it to file so we can reconstruct this process if needed.
 			try {
-				FileOutputStream fileout = new FileOutputStream(outputPath + label + ".classifier");
+				FileOutputStream fileout = new FileOutputStream(outputFolder + label + ".classifier");
 				ObjectOutputStream serializer = new ObjectOutputStream(fileout);
 				serializer.writeObject(thisClassifier);
 				serializer.close();
@@ -155,7 +157,7 @@ public class DatePredictor {
 		volumePredictions.addStringColumn(htids, "volume");
 		volumePredictions.addIntegerColumn(predictedDates, "date");
 		volumePredictions.addDoubleArray(predictAllVols, classLabels);
-		volumePredictions.writeToFile(outputPath + "volumePredictions.tsv");
+		volumePredictions.writeToFile(outputFolder + "volumePredictions.tsv");
 	}
 	
 	private static int predictDate(ArrayList<Double> predictionVector, ArrayList<String> classLabels, int span) {

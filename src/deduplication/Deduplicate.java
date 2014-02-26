@@ -7,7 +7,7 @@ import classification.LineWriter;
 import classification.WarningLogger;
 import datasets.InputFileException;
 import datasets.TaubMetadataReader;
-import datasets.Collection;
+import datasets.Metadata;
 import datasets.SparseTableReader;
 
 public class Deduplicate {
@@ -44,7 +44,7 @@ public class Deduplicate {
 		
 		TaubMetadataReader metadataReader = new TaubMetadataReader(metadataSource);
 		String[] fields = {"recordid", "author", "title", "date", "totalwords"};
-		Collection metadata;
+		Metadata metadata;
 		
 		try {
 			metadata = metadataReader.readTSV(fields);
@@ -52,7 +52,7 @@ public class Deduplicate {
 		catch (InputFileException e) {
 			String stacktrace = stacktraceToString(e);
 			System.out.println("Exception in metadataReader\n" + stacktrace);
-			metadata = new Collection();
+			metadata = new Metadata(fields);
 			System.exit(0);
 		}
 		System.out.println("Done reading metadata.");
