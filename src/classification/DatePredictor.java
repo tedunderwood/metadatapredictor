@@ -139,9 +139,17 @@ public class DatePredictor {
 			for (int j = floor; j < ceiling; ++j) {
 				Volume vol = volumes.get(j);
 				Document doc = dataReader.getDocument(vol, vocabulary);
+				// Now, it's possible that the doc was actually not found by the
+				// dataReader. Thus the if-then-else statement inside the loop below.
+				
 				ArrayList<Double> predictionVector = new ArrayList<Double>();
 				for (LogisticClassifier model : models) {
-					predictionVector.add(model.predictDocument(doc));
+					if (doc.fileNotFound) {
+						predictionVector.add(0d);
+					}
+					else {
+						predictionVector.add(model.predictDocument(doc));
+					}
 				}
 				predictAllVols.add(predictionVector);
 			}
