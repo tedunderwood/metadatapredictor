@@ -15,6 +15,8 @@ public class DatePredictor {
 	static int startDate;
 	static int endDate;
 	static int binRadius;
+	static int SMOOTHSPAN = 12;
+	static int VOLUMESPERCLASSFORLEXICON = 20;
 
 	/**
 	 * @author tunderwood
@@ -49,7 +51,7 @@ public class DatePredictor {
 		}
 		System.out.println("Done reading metadata.");
 		
-		startDate = 1700;
+		startDate = 1800;
 		endDate = 1899;
 		// both boolean flags are true because we tolerate errors in date parsing
 		
@@ -68,7 +70,7 @@ public class DatePredictor {
 		
 		classMap = new DateClassMap(firstBinMidpoint, endDate, binRadius,
 			binSpacing, metadata, "date");
-		classMap.mapVolsByMetadata(1700, 1899);
+		classMap.mapVolsByMetadata(1800, 1899);
 		
 		System.out.println("Done constructing classMap.");
 		
@@ -127,15 +129,26 @@ public class DatePredictor {
 				e.printStackTrace();
 			}
 		}
+		
 		// Now we actually classify the volumes using our model.
+		// We read files in chunks to avoid maxing out memory.
+		
 		ArrayList<Volume> volumes = metadata.getVolumes();
 		int numVolumes = metadata.getSize();
 		int numChunks = (int) Math.ceil(numVolumes / (double) maxVolsToRead);
+		
+		// We store predictions in a collection, but also write them to file when
+		// each chunk is completed.
+		LineWriter progressiveWriter = new LineWriter(outputFolder + "cumulativePredictions.tsv", true);
+		// The boolean flag sets this so that each write will append rather than overwrite the file.
+		
 		ArrayList<ArrayList<Double>> predictAllVols = new ArrayList<ArrayList<Double>>();
 		for (int i = 0; i < numChunks; ++i) {
 			int floor = i * maxVolsToRead;
 			int ceiling = (i + 1) * maxVolsToRead;
 			if (ceiling > numVolumes) ceiling = numVolumes;
+			String[] outputChunk = new String[ceiling-floor];
+			int counter = 0;
 			for (int j = floor; j < ceiling; ++j) {
 				Volume vol = volumes.get(j);
 				Document doc = dataReader.getDocument(vol, vocabulary);
@@ -152,15 +165,21 @@ public class DatePredictor {
 					}
 				}
 				predictAllVols.add(predictionVector);
+				outputChunk[counter] = outputLine(doc, predictionVector, classLabels, SMOOTHSPAN);
+				counter += 1;
 			}
+			progressiveWriter.send(outputChunk);
 		}
+		
+		// The lines that follow actually duplicate the output produced by progressiveWriter,
+		// but they do so with some valuable niceties, like a header.
 		
 		ArrayList<String> attestedDates = new ArrayList<String>();
 		ArrayList<Integer> predictedDates = new ArrayList<Integer>();
 		// Now we need to infer estimated dates from the maximum prediction. But since
 		// predictions may be noisy, we want to do this with some smoothing.
 		for (int i = 0; i < numVolumes; ++i) {
-			int predictedDate = predictDate(predictAllVols.get(i), classLabels, 12);
+			int predictedDate = predictDate(predictAllVols.get(i), classLabels, SMOOTHSPAN);
 			String attestedDate = volumes.get(i).getValue("date");
 			predictedDates.add(predictedDate);
 			attestedDates.add(attestedDate);
@@ -223,6 +242,28 @@ public class DatePredictor {
 		return predictedDate;
 	}
 	
+	private static String outputLine(Document doc, ArrayList<Double> predictionVector, ArrayList<String> classLabels, int span) {
+		String predictedDate;
+		if (doc.fileNotFound) {
+			predictedDate = "0";
+		}
+		else {
+			predictedDate = Integer.toString(predictDate(predictionVector, classLabels, span));
+		}
+		String attestedDate = doc.getVolume().getValue("date");
+		String htid = doc.getVolume().htid;
+		String allPredictions = "";
+		int columns = predictionVector.size();
+		for (int j = 0; j < columns; ++ j) {
+			allPredictions = allPredictions + predictionVector.get(j);
+			if (j < (columns-1)) {
+				allPredictions = allPredictions + "\t";
+			}
+		}
+		String outLine = htid + "\t" + attestedDate + "\t" + predictedDate + "\t" + allPredictions;
+		return outLine;	
+	}
+	
 	private static String stacktraceToString(InputFileException e) {
 	    return Arrays.toString(e.getStackTrace());
 	}
@@ -233,15 +274,14 @@ public class DatePredictor {
 		// We leave this empty, which ensures loading all features.
 		HashMap<String, Integer> wordcounts = new HashMap<String, Integer>();
 		
-		int volumesPerClass = 20;
 		System.out.println("Building vocabulary.");
 		for (String label : classLabels) {
 			System.out.println("Getting class " + label + ".");
 			int volumesToGet;
 			int thisSize = classMap.getClassSize(label);
-			if (thisSize < volumesPerClass) volumesToGet = thisSize;
+			if (thisSize < VOLUMESPERCLASSFORLEXICON) volumesToGet = thisSize;
 			else {
-				volumesToGet = volumesPerClass;
+				volumesToGet = VOLUMESPERCLASSFORLEXICON;
 			}
 			ArrayList<Volume> selectedVols = classMap.takeRandomSample(label, volumesToGet);
 			System.out.println("Contains " + Integer.toString(selectedVols.size()) + " volumes.");

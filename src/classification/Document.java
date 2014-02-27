@@ -104,5 +104,9 @@ public class Document {
 	public HashMap<String, Double> getFeatures(){
 		return features;
 	}
+	
+	public Volume getVolume() {
+		return vol;
+	}
 
 }
