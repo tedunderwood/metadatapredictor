@@ -48,6 +48,7 @@ public class PairtreeReader {
 		}
 		
 		HashMap<String, Double> wordcounts = new HashMap<String, Double>();
+		boolean fileFound = false;
 		
 		try {
 			String filelines[] = reader.readlines();
@@ -60,21 +61,37 @@ public class PairtreeReader {
 					wordcounts.put(word, count);
 				}
 			}
-			
+			fileFound = true;	
 		}
 		catch (InputFileException e) {
 			WarningLogger.addFileNotFound(path);
 			System.out.println("File not found: " + path);
+			fileFound = false;
 		}
-		Document newInstance = new Document(wordcounts, vol);
+		Document newInstance = new Document(wordcounts, vol, fileFound);
 		return newInstance;
 	}
 	
+	/**
+	 * This method gets a list of Document objects using the pairtree paths implied by volume IDs in
+	 * a list of Volume objects. It stores wordcounts in the Documents as a map of words -> double 
+	 * values that can represent (normalized or raw) wordcounts. Default assumption is that they're
+	 * raw and need to be normalized later. Note that this method *does not* guarantee that the 
+	 * length of the list it returns will match the length of the list it's sent, because it 
+	 * does not add Documents in cases where the matching wordcount data could not be found.
+	 * When using this method, you should use the volume field in the Document object to establish
+	 * identity. Don't assume a 1-to-1 mapping.
+	 * 
+	 * @param vols
+	 * @param featuresToLoad
+	 * @return
+	 */
 	public ArrayList<Document> getMultipleDocs(ArrayList<Volume> vols, HashSet<String> featuresToLoad) {
 		ArrayList<Document> docList = new ArrayList<Document>();
 		for (Volume vol : vols) {
 			Document thisDoc = getDocument(vol, featuresToLoad);
-			docList.add(thisDoc);
+			if (!thisDoc.fileNotFound) docList.add(thisDoc);
+			// If the document isn't based on actual file data, we don't add it to the list.
 		}
 		return docList;
 	}

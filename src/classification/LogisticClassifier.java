@@ -60,7 +60,7 @@ public class LogisticClassifier implements java.io.Serializable {
 		FastVector classValues = new FastVector(2);
 		classValues.addElement("positive");
 		classValues.addElement("negative");
-		Attribute classAttribute = new Attribute("class", classValues);
+		Attribute classAttribute = new Attribute("class-Attribute", classValues);
 		attributeNames.addElement(classAttribute);
 		
 		trainingSet = new Instances(classToIdentify, attributeNames, numInstances);

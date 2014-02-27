@@ -32,5 +32,16 @@ public final class WarningLogger {
 	public static void addFileNotFound(String file) {
 		notFound.add(file);
 	}
+	
+	public static void writeFilesNotFound(String path) {
+		LineWriter outFile = new LineWriter(path, false);
+		String[] outLines = new String[notFound.size()];
+		int counter = 0;
+		for (String aFile : notFound) {
+			outLines[counter] = aFile;
+			counter += 1;
+		}
+		outFile.send(outLines);
+	}
 
 }

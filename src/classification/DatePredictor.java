@@ -49,7 +49,7 @@ public class DatePredictor {
 		}
 		System.out.println("Done reading metadata.");
 		
-		startDate = 1800;
+		startDate = 1700;
 		endDate = 1899;
 		// both boolean flags are true because we tolerate errors in date parsing
 		
@@ -68,7 +68,7 @@ public class DatePredictor {
 		
 		classMap = new DateClassMap(firstBinMidpoint, endDate, binRadius,
 			binSpacing, metadata, "date");
-		classMap.mapVolsByMetadata(1800, 1899);
+		classMap.mapVolsByMetadata(1700, 1899);
 		
 		System.out.println("Done constructing classMap.");
 		
@@ -169,6 +169,8 @@ public class DatePredictor {
 		volumePredictions.addIntegerColumn(predictedDates, "predicted");
 		volumePredictions.addDoubleArray(predictAllVols, classLabels);
 		volumePredictions.writeToFile(outputFolder + "volumePredictions.tsv");
+		
+		WarningLogger.writeFilesNotFound(outputFolder + "filesNotFound.txt");
 	}
 	
 	private static int predictDate(ArrayList<Double> predictionVector, ArrayList<String> classLabels, int span) {
@@ -223,7 +225,7 @@ public class DatePredictor {
 		// We leave this empty, which ensures loading all features.
 		HashMap<String, Integer> wordcounts = new HashMap<String, Integer>();
 		
-		int volumesPerClass = 10;
+		int volumesPerClass = 20;
 		System.out.println("Building vocabulary.");
 		for (String label : classLabels) {
 			System.out.println("Getting class " + label + ".");
@@ -238,10 +240,6 @@ public class DatePredictor {
 			ArrayList<Document> selectedDocs = dataReader.getMultipleDocs(selectedVols, featuresToLoad);
 			for (Document doc : selectedDocs) {
 				HashMap<String, Double> features = doc.getFeatures();
-				int thisdocsize = features.size();
-				if (thisdocsize > 0) {
-					System.out.println(Integer.toString(thisdocsize));
-				}
 				for (String key : features.keySet()) {
 					int newCount = features.get(key).intValue();
 					
@@ -274,10 +272,7 @@ public class DatePredictor {
 		for (int i = 0; i < vocabularySize; ++i) {
 			orderedVocabulary.add(allTheKeys[i]);
 		}
-		
-		wordcounts = null;
-		allTheKeys = null;
-		System.gc();
+
 		return orderedVocabulary;
 	}
 
