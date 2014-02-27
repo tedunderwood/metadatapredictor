@@ -49,13 +49,15 @@ public class DatePredictor {
 		}
 		System.out.println("Done reading metadata.");
 		
-		startDate = metadata.getMinDate(true);
-		endDate = metadata.getMaxDate(true);
+		startDate = 1800;
+		endDate = 1899;
 		// both boolean flags are true because we tolerate errors in date parsing
+		
+		System.out.println("Start date: " + Integer.toString(startDate));
+		System.out.println("End date: " + Integer.toString(endDate));
+		
 		if (endDate < 0 | startDate < 0) {
-			System.out.println("Error condition:");
-			System.out.println("Start date = " + Integer.toString(startDate));
-			System.out.println("End date = " + Integer.toString(endDate));
+			System.out.println("Bad dates!");
 			System.exit(1);
 		}
 		int firstBinMidpoint = startDate + binRadius;
@@ -66,7 +68,9 @@ public class DatePredictor {
 		
 		classMap = new DateClassMap(firstBinMidpoint, endDate, binRadius,
 			binSpacing, metadata, "date");
-		classMap.mapVolsByMetadata();
+		classMap.mapVolsByMetadata(1800, 1899);
+		
+		System.out.println("Done constructing classMap.");
 		
 		ArrayList<String> classLabels = classMap.getKnownClasses();
 		int classCount = classLabels.size();
@@ -80,6 +84,7 @@ public class DatePredictor {
 		PairtreeReader dataReader = new PairtreeReader(dataFolder);
 		ArrayList<String> orderedVocabulary = buildVocabulary(classLabels, vocabularySize, dataReader);
 		HashSet<String> vocabulary = new HashSet<String>(orderedVocabulary);
+		System.out.println("Built vocabulary.");
 		
 		// Now we're going to build a model for each class in the classMap, and save it.
 		int maxSetSize = maxVolsToRead / 2;
@@ -87,6 +92,7 @@ public class DatePredictor {
 		ArrayList<LogisticClassifier> models = new ArrayList<LogisticClassifier>(classCount);
 		
 		for (String label : classLabels) {
+			System.out.println("Building a model for class: " + label);
 			int thisSize = classMap.getClassSize(label);
 			if (thisSize > maxSetSize) setSize = maxSetSize;
 			else setSize = thisSize;
@@ -141,12 +147,16 @@ public class DatePredictor {
 			}
 		}
 		
+		ArrayList<String> attestedDates = new ArrayList<String>();
 		ArrayList<Integer> predictedDates = new ArrayList<Integer>();
 		// Now we need to infer estimated dates from the maximum prediction. But since
 		// predictions may be noisy, we want to do this with some smoothing.
 		for (int i = 0; i < numVolumes; ++i) {
-			int newDate = predictDate(predictAllVols.get(i), classLabels, 12);
-			predictedDates.add(newDate);
+			int predictedDate = predictDate(predictAllVols.get(i), classLabels, 12);
+			String attestedDate = volumes.get(i).getValue("date");
+			predictedDates.add(predictedDate);
+			attestedDates.add(attestedDate);
+			System.out.println(predictedDate);
 		}
 		
 		ArrayWriter volumePredictions = new ArrayWriter("\t");
@@ -155,7 +165,8 @@ public class DatePredictor {
 			htids.add(vol.htid);
 		}
 		volumePredictions.addStringColumn(htids, "volume");
-		volumePredictions.addIntegerColumn(predictedDates, "date");
+		volumePredictions.addStringColumn(attestedDates, "attested");
+		volumePredictions.addIntegerColumn(predictedDates, "predicted");
 		volumePredictions.addDoubleArray(predictAllVols, classLabels);
 		volumePredictions.writeToFile(outputFolder + "volumePredictions.tsv");
 	}
@@ -212,22 +223,35 @@ public class DatePredictor {
 		// We leave this empty, which ensures loading all features.
 		HashMap<String, Integer> wordcounts = new HashMap<String, Integer>();
 		
-		int volumesPerClass = 100;
+		int volumesPerClass = 10;
+		System.out.println("Building vocabulary.");
 		for (String label : classLabels) {
+			System.out.println("Getting class " + label + ".");
 			int volumesToGet;
 			int thisSize = classMap.getClassSize(label);
 			if (thisSize < volumesPerClass) volumesToGet = thisSize;
-			else volumesToGet = volumesPerClass;
+			else {
+				volumesToGet = volumesPerClass;
+			}
 			ArrayList<Volume> selectedVols = classMap.takeRandomSample(label, volumesToGet);
+			System.out.println("Contains " + Integer.toString(selectedVols.size()) + " volumes.");
 			ArrayList<Document> selectedDocs = dataReader.getMultipleDocs(selectedVols, featuresToLoad);
 			for (Document doc : selectedDocs) {
 				HashMap<String, Double> features = doc.getFeatures();
+				int thisdocsize = features.size();
+				if (thisdocsize > 0) {
+					System.out.println(Integer.toString(thisdocsize));
+				}
 				for (String key : features.keySet()) {
 					int newCount = features.get(key).intValue();
-					int existingCount = wordcounts.get(key);
-					if (existingCount == 0) wordcounts.put(key, newCount);
-					else wordcounts.put(key, existingCount + newCount);
-					// really that's a sort of moot if-else since 0 + newCount = newCount
+					
+					if (wordcounts.containsKey(key)) {
+						int existingCount = wordcounts.get(key);
+						wordcounts.put(key, existingCount + newCount);
+					}
+					else {
+						wordcounts.put(key, newCount);
+					}
 				}
 			}
 		}
@@ -235,6 +259,7 @@ public class DatePredictor {
 		// now we have a HashMap that maps each word to its count
 		ValueComparator inValueOrder = new ValueComparator(wordcounts);
 		int mapSize = wordcounts.size();
+		System.out.println("Total dictionary size: " + Integer.toString(mapSize));
 		String[] allTheKeys = new String[mapSize];
 		int idx = 0;
 		for (String aWord : wordcounts.keySet()) {

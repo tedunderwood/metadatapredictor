@@ -50,9 +50,22 @@ public class ArrayWriter {
 	}
 	
 	public void addDoubleArray(ArrayList<ArrayList<Double>> doubleArray, ArrayList<String> headerLabels) {
-		assert doubleArray.size() == headerLabels.size();
-		for (int i = 0; i < doubleArray.size(); ++i) {
-			addDoubleColumn(doubleArray.get(i), headerLabels.get(i));
+		ArrayList<Double> firstRow = doubleArray.get(0);
+		assert firstRow.size() == headerLabels.size();
+		int columnsToAdd = firstRow.size();
+		
+		// The array comes to us organized by row. We need to reorganize it by column.
+		ArrayList<ArrayList<Double>> arrayByColumn = new ArrayList<ArrayList<Double>>(columnsToAdd);
+		for (int i = 0; i < columnsToAdd; ++ i) {
+			ArrayList<Double> newList = new ArrayList<Double>();
+			for (int j = 0; j < doubleArray.size(); ++j) {
+				newList.add(doubleArray.get(j).get(i));
+			}
+			arrayByColumn.add(newList);
+		}
+		
+		for (int i = 0; i < arrayByColumn.size(); ++i) {
+			addDoubleColumn(arrayByColumn.get(i), headerLabels.get(i));
 		}
 	}
 	
@@ -76,16 +89,26 @@ public class ArrayWriter {
 	
 	public void writeToFile(String filePath) {
 		LineWriter outFile = new LineWriter(filePath, false);
-		String [] outLines = new String[rows];
+		String [] outLines = new String[rows + 1];
+		
+		String headerLine = "";
+		for (int j = 0; j < columns; ++ j) {
+			headerLine = headerLine + header.get(j);
+			if (j < (columns-1)) {
+				headerLine = headerLine + separator;
+			}
+		}
+		outLines[0] = headerLine;
+		
 		for (int i = 0; i < rows; ++ i) {
 			String thisLine = "";
-			boolean separatorYet = false;
 			for (int j = 0; j < columns; ++ j) {
 				thisLine = thisLine + cells.get(j).get(i);
-				if (separatorYet) thisLine = thisLine + separator;
-				else separatorYet = true;
+				if (j < (columns-1)) {
+					thisLine = thisLine + separator;
+				}
 			}
-			outLines[i] = thisLine;
+			outLines[i + 1] = thisLine;
 		}
 		outFile.send(outLines);
 	}

@@ -42,5 +42,4 @@ public abstract class ClassMap {
 	 */
 	public abstract ArrayList<Volume> getSelectedNonmembers(String aClass, int n);
 	
-	public abstract void mapVolsByMetadata();
 }

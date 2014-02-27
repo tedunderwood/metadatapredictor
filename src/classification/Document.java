@@ -42,7 +42,9 @@ public class Document {
 	}
 	
 	public double termNormalizedByWordcount(String term) {
-		if (numWords > 0) return (features.get(term) / numWords);
+		if (numWords > 0 & features.containsKey(term)) {
+			return (features.get(term) / numWords);
+		}
 		else return 0;
 	}
 	

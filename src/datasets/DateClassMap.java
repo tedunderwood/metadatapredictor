@@ -75,7 +75,7 @@ public class DateClassMap extends ClassMap {
 	 * volumes can belong to more than one class.
 	 * 
 	 */
-	public void mapVolsByMetadata() {
+	public void mapVolsByMetadata(int allowableStartDate, int allowableEndDate) {
 		// First we initialize the map
 		classMembers = new HashMap<String, ArrayList<Volume>>();
 		for (int midpoint : classLabels) {
@@ -96,24 +96,37 @@ public class DateClassMap extends ClassMap {
 			// Maybe I should actually throw an Exception here.
 			
 			else {
-				if (!isInteger(value)) {
+				String firstfour;
+				if (value.length() >= 4) firstfour = value.substring(0, 4);
+				else firstfour = "abcd";
+				
+				if (!isInteger(value) & !isInteger(firstfour)) {
 					classMembers.get(UNKNOWN).add(vol);
 				}
 				// Dates that don't convert to integers put their volume in
 				// the UNKNOWN class.
 				
 				else {
-					int thisdate = Integer.parseInt(value);
+					int thisdate;
+					if (isInteger(value)) thisdate = Integer.parseInt(value);
+					else thisdate = Integer.parseInt(firstfour);
 					// Convert to integer so you can check < >.
 					
-					for (int midpoint : classLabels) {
-						if (thisdate >= (midpoint - binRadius) & 
-								thisdate <= (midpoint + binRadius)) {
-							classMembers.get(Integer.toString(midpoint)).add(vol);
+					// if the date is outside allowed parameters, it's an unknown
+					if (thisdate < allowableStartDate | thisdate > allowableEndDate) {
+						classMembers.get(UNKNOWN).add(vol);
+					}
+					// otherwise, finally, we have an allowable date
+					else {
+						for (int midpoint : classLabels) {
+							if (thisdate >= (midpoint - binRadius) & 
+									thisdate <= (midpoint + binRadius)) {
+								classMembers.get(Integer.toString(midpoint)).add(vol);
+							}
+							// Note that it's entirely possible for a Volume to be a
+							// member of more than one class, since binRadius can exceed
+							// binSpacing / 2.
 						}
-						// Note that it's entirely possible for a Volume to be a
-						// member of more than one class, since binRadius can exceed
-						// binSpacing / 2.
 					}
 					
 				}
@@ -161,8 +174,8 @@ public class DateClassMap extends ClassMap {
 		int classSize = getClassSize(aClass);
 		ArrayList<Volume> members = new ArrayList<Volume>(classMembers.get(aClass));
 		// make a shallow copy to avoid shuffling the underlying list in classMembers
-
-		if (n <= classSize) return members;
+		
+		if (n >= classSize) return members;
 		else {
 			Collections.shuffle(members);
 			// We're going to sample without replacement. Easiest way to do that

@@ -32,24 +32,31 @@ public class PairtreeReader {
 		// everything after the period
 		String ppath = pairtree.mapToPPath(pathPart);
 		String encapsulatingDirectory = pairtree.cleanId(pathPart);
-		String wholePath = dataPath + "/" + prefix + "/pairtree_root/" + ppath + "/"+ encapsulatingDirectory + 
-				"/" + encapsulatingDirectory + "vol.tsv";
+		String wholePath = dataPath + prefix + "/pairtree_root/" + ppath + "/"+ encapsulatingDirectory + 
+				"/" + encapsulatingDirectory + ".vol.tsv";
 		return wholePath;
 	}
 	
 	public Document getDocument(Volume vol, HashSet<String> featuresToLoad) {
 		String path = getPairtreePath(vol);
 		LineReader reader = new LineReader(path);
+		boolean loadAll = false;
+		// if we aren't given a feature list, load all features
+		
+		if (featuresToLoad.size() < 1) {
+			loadAll = true;
+		}
 		
 		HashMap<String, Double> wordcounts = new HashMap<String, Double>();
 		
 		try {
 			String filelines[] = reader.readlines();
+
 			for (String line : filelines){
 				String[] tokens = line.split("\t");
-				String word = tokens[1];
-				if (featuresToLoad.contains(word)) {
-					Double count = Double.parseDouble(tokens[2]);
+				String word = tokens[0];
+				if (featuresToLoad.contains(word) | loadAll) {
+					Double count = Double.parseDouble(tokens[1]);
 					wordcounts.put(word, count);
 				}
 			}
@@ -57,6 +64,7 @@ public class PairtreeReader {
 		}
 		catch (InputFileException e) {
 			WarningLogger.addFileNotFound(path);
+			System.out.println("File not found: " + path);
 		}
 		Document newInstance = new Document(wordcounts, vol);
 		return newInstance;
